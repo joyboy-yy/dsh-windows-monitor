@@ -1,0 +1,86 @@
+{
+  "name": "dsh-windows-monitor",
+  "version": "0.1.0",
+  "description": "System monitor overlay for DeepSeek Harness: a compact corner pill showing CPU and memory, expandable into a detail card with disks, network, uptime and battery. Collectors for Windows, Linux and macOS.",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/index.d.ts",
+    "lib/client.js",
+    "lib/client.js.map",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "prepare": "pnpm run build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joyboy-yy/dsh-windows-monitor.git"
+  },
+  "homepage": "https://github.com/joyboy-yy/dsh-windows-monitor#readme",
+  "bugs": {
+    "url": "https://github.com/joyboy-yy/dsh-windows-monitor/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "deepseek",
+    "cordis",
+    "plugin",
+    "windows-monitor",
+    "monitor",
+    "system-monitor",
+    "resource-monitor",
+    "performance",
+    "cpu",
+    "memory",
+    "disk",
+    "windows",
+    "macos",
+    "linux",
+    "overlay",
+    "web-ui"
+  ],
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsdown": "^0.23.0",
+    "typescript": "^6.0.0",
+    "vitest": "^3.2.4"
+  }
+}

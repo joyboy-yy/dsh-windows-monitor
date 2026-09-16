@@ -1,0 +1,28 @@
+# Keep the devDependencies moving without turning the repo into a stream of
+# single-bump PRs.
+#
+# Note for reviewers: `lib/` is committed, so a bump that can change bundler
+# output (tsdown, typescript, react) needs `pnpm run build` and a committed
+# `lib/` in the same PR. CI's `git diff --exit-code -- lib` step is what catches
+# a missed rebuild — a red check here usually means exactly that, not a broken
+# dependency.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore(ci)"

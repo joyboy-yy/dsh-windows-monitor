@@ -1,0 +1,101 @@
+name: Bug report
+description: Something the panel, the route or a collector does wrong.
+title: "[bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report.
+
+        **Security issues do not belong here** — report them privately through the
+        [security policy](https://github.com/joyboy-yy/dsh-windows-monitor/security/policy).
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: Which OS is the harness — and therefore the collector — running on?
+      options:
+        - Windows
+        - Linux
+        - macOS
+        - Other / unsupported platform
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: OS version
+      placeholder: "Windows 11 24H2 / Ubuntu 24.04 / macOS 15.1"
+    validations:
+      required: true
+
+  - type: input
+    id: dsh-version
+    attributes:
+      label: DeepSeek Harness version
+      description: Output of `dsh --version`, or the installed `@deepseek-ai/dsh` version.
+    validations:
+      required: true
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version or commit
+      placeholder: "v0.1.0, or a commit sha for a checkout install"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How is the plugin installed?
+      options:
+        - Local checkout (`dsh plugin add <dir>`)
+        - Release tarball
+        - GitHub source (`github:joyboy-yy/dsh-windows-monitor#tag`)
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happens
+    attributes:
+      label: What happens
+      description: What you see, and what you expected instead. Screenshots help for anything visual.
+    validations:
+      required: true
+
+  - type: textarea
+    id: collector-output
+    attributes:
+      label: Raw collector output
+      description: |
+        For wrong numbers or a collection that fails, run the suite with the debug hook
+        and paste the block it prints:
+
+        `DEBUG_COLLECTOR=1 pnpm run test`
+
+        PowerShell: `$env:DEBUG_COLLECTOR=1; pnpm run test`
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: route-response
+    attributes:
+      label: Route response
+      description: Body of `GET /api/windows-monitor/snapshot`, if the panel shows a failure.
+      render: json
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmation
+      options:
+        - label: I removed anything personal from the pasted output — the snapshot contains your host name.
+          required: true

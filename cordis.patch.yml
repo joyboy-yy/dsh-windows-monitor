@@ -1,0 +1,9 @@
+- insert:
+    # Host health panel plus its read-only snapshot endpoint.
+    #
+    # `inject` here is ordinary Cordis service injection for the HOST half: the
+    # panel needs the shell runner (to invoke the platform collector), the
+    # sandbox policy seam, and the web-server route registry.
+    - id: windows-monitor
+      name: dsh-windows-monitor
+      inject: [shell, sandboxPolicy, webServer]

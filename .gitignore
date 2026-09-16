@@ -1,0 +1,13 @@
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+dist/
+
+# lib/ is deliberately COMMITTED: DSH activates a plugin by reading
+# lib/client.js from disk, and `dsh plugin add github:<owner>/<repo>` clones the
+# repository without necessarily running a build. Shipping the artifact keeps
+# that install path working.
+!lib/

@@ -1,0 +1,21 @@
+# https://editorconfig.org
+#
+# `.gitattributes` normalizes line endings on commit; this keeps editors from
+# reintroducing CRLF or tabs in the first place.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.md]
+# Two trailing spaces are a hard line break in Markdown.
+trim_trailing_whitespace = false
+
+[lib/**]
+# Build output, committed on purpose (see CONTRIBUTING.md). Never hand-edit.
+generated_code = true
