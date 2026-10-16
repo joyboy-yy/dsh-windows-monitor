@@ -5,9 +5,9 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] - unreleased
+## [0.1.0] - 2026-10-16
 
-The first public release. The `v0.1.0` git tag is created when it is published.
+The first public release. Tagged `v0.1.0` and published to npm as [`dsh-windows-monitor`](https://www.npmjs.com/package/dsh-windows-monitor).
 
 ### Added
 

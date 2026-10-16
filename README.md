@@ -56,6 +56,12 @@ Known collector limitations:
 
 ## Install
 
+From npm — prebuilt, and the only path that needs no build permission:
+
+```powershell
+dsh plugin --profile web add dsh-windows-monitor
+```
+
 From a local checkout — this is the path to use while developing:
 
 ```powershell

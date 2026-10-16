@@ -56,6 +56,12 @@ Linux 与 macOS 的**事实来源是 CI**，见 [`.github/workflows/ci.yml`](.gi
 
 ## 安装
 
+从 npm 安装——产物已预构建，也是唯一不需要构建授权的路径：
+
+```powershell
+dsh plugin --profile web add dsh-windows-monitor
+```
+
 从本地目录安装（开发期间用这条）：
 
 ```powershell
