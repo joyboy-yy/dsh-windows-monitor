@@ -18,9 +18,9 @@ Only the latest release on `main` is supported. Fixes are not backported.
 Worth reading before judging severity. The full picture is in the [security model](README.md#security-model).
 
 - The host half resolves the **`danger-full-access`** sandbox policy so the shell can run. The commands are read-only; the granted policy is not. This is the main thing to review, and it lives in `src/index.ts` and `src/collectors/`.
-- Collectors run one fixed shell script per platform. The platform comes from `process.platform`, never from the HTTP request.
+- The collector runs one fixed shell script. The platform comes from `process.platform`, never from the HTTP request; a platform without a collector gets an explicit error instead of a command.
 - The only HTTP surface is `GET /api/windows-monitor/snapshot`, served locally by the harness. There is no outbound network traffic.
-- The snapshot carries the host name, CPU percentage, memory totals and usage, per-volume capacity and usage, a connected-adapter count, uptime hours, and battery percentage when a battery exists. No file contents, usernames, paths or credentials.
+- The snapshot carries the host name, CPU percentage, memory totals and usage, per-volume capacity and usage, disk busy time and read/write throughput, a connected-adapter count, uptime hours, and battery percentage when a battery exists. No file contents, usernames, paths, credentials, or per-process and per-file disk attribution.
 - The plugin registers no tools and does not touch the model, the session or the transcript.
 
 ## In scope

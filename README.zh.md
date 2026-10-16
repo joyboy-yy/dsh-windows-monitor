@@ -71,13 +71,13 @@ dsh --profile web
 从发布压缩包安装（已预构建，无需授予构建权限）：
 
 ```powershell
-dsh plugin --profile web add .\dsh-windows-monitor-0.1.0.tgz
+dsh plugin --profile web add .\dsh-windows-monitor-<version>.tgz
 ```
 
-从固定的源码标签安装：
+从固定的源码标签安装——当前标签见 [releases](https://github.com/joyboy-yy/dsh-windows-monitor/releases)：
 
 ```powershell
-dsh plugin --profile web add github:joyboy-yy/dsh-windows-monitor#v0.1.0
+dsh plugin --profile web add github:joyboy-yy/dsh-windows-monitor#v0.2.1
 ```
 
 git 安装会拉取源码并执行本包的 `prepare` 构建，这意味着**包代码会在 agent 沙箱之外于你的机器上执行**。pnpm 默认会拒绝，直到 profile 的 `pnpm-workspace.yaml` 显式放行：

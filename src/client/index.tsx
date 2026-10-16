@@ -17,7 +17,7 @@ export const inject = ['slots', 'timer'] as const
 const SLOT = 'shell.overlay'
 
 /** This entry's cell key. A fresh id is added beside the shipped entries. */
-const SLOT_ID = 'system-local-monitor'
+const SLOT_ID = 'windows-local-monitor'
 
 /** Register the panel and own the stylesheet for this plugin's lifetime. */
 export function apply(ctx: ClientPluginContext): void {

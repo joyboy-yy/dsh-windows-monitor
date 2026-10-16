@@ -46,7 +46,7 @@ body:
     id: plugin-version
     attributes:
       label: Plugin version or commit
-      placeholder: "v0.1.0, or a commit sha for a checkout install"
+      placeholder: "v0.2.1, or a commit sha for a checkout install"
     validations:
       required: true
 
