@@ -75,7 +75,18 @@ describe.skipIf(collector === undefined)('current platform collector', () => {
     expect(snapshot.memory.totalGB).toBeGreaterThan(0)
     expect(snapshot.memory.usedPct).toBeGreaterThanOrEqual(0)
     expect(snapshot.memory.usedPct).toBeLessThanOrEqual(100)
-    expect(snapshot.uptimeHours).toBeGreaterThan(0)
+    // Uptime is only guaranteed to be non-negative. `uptimeHours` is rounded to
+    // one decimal, so a machine booted within the last ~3 minutes reports 0.0
+    // legitimately — and CI runners are exactly that fresh. Asserting a
+    // positive value here would be testing the runner's age, not the collector.
+    expect(snapshot.uptimeHours).toBeGreaterThanOrEqual(0)
+
+    // The contract that actually matters is on the raw fact, which carries full
+    // seconds and therefore stays meaningful on a freshly booted machine.
+    const uptimeFact = /^uptime_s=(\d+)$/mu.exec(result.stdout)
+    expect(uptimeFact, 'collector must emit an integer uptime_s').not.toBeNull()
+    expect(Number(uptimeFact?.[1])).toBeGreaterThanOrEqual(0)
+
     expect(snapshot.network.adapters).toBeGreaterThanOrEqual(0)
     expect(Array.isArray(snapshot.disks)).toBe(true)
 
