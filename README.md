@@ -9,7 +9,7 @@ A system monitor overlay for [DeepSeek Harness](https://github.com/deepseek-ai/d
 
 Runs on **Windows**.
 
-![Collapsed and expanded states](docs/preview.png)
+![Collapsed and expanded states](https://gcore.jsdelivr.net/gh/joyboy-yy/dsh-windows-monitor@main/docs/preview.png)
 
 ## Features
 

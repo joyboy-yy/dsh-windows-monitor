@@ -67,6 +67,7 @@ These are the ones that bite. Everything else is ordinary TypeScript and React.
 - **Only Windows has a collector, and adding another platform is a scope decision, not a patch.** `0.1.0` shipped Linux and macOS collectors written from documentation; they were removed in `0.2.0` because the maintainer could not run them. A PR adding a platform needs an owner who can actually run it.
 - **Facts are `key=value`, not JSON.** Emitting correct JSON from PowerShell without assuming a JSON library is a portability trap. The host stamps the timestamp.
 - **`README.md` and `README.zh.md` are kept in sync.** A PR that changes user-facing behaviour changes both.
+- **README images use an absolute URL, and must stay that way.** npm does not serve package files, so a relative path like `docs/preview.png` renders on GitHub and silently breaks on the npm page. The URL points at `gcore.jsdelivr.net` rather than the usual `cdn.jsdelivr.net` because the latter is unreachable from the maintainer's network — `raw.githubusercontent.com` is too. Both were measured, not assumed.
 - **Panel styling uses theme tokens only** — no hard-coded colours — and classes carry the `sm-` prefix.
 
 ## Changing or adding a collector
