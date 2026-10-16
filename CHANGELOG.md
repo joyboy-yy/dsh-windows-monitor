@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-10-16
+
+Everything here was visible on the **npm page**, which renders its README from the published tarball rather than from the repository — so none of it was fixed by pushing to `main`.
+
+### Fixed
+
+- **The preview image was broken on npm.** npm does not serve package files, so the relative path `docs/preview.png` rendered on GitHub and silently failed on npm. It is now an absolute URL, and the host was chosen by measurement rather than habit: from the maintainer's network `raw.githubusercontent.com` answered 0/3 and `cdn.jsdelivr.net` — the usual choice — 0/4, while `gcore.jsdelivr.net` served the image 4/4. The rule is recorded in CONTRIBUTING.md so a future cleanup does not turn it back into a relative path.
+- Both READMEs' install examples named `0.1.0` — the release that still shipped the Linux and macOS collectors — in a document that says those were removed in `0.2.0`. The tarball example no longer hardcodes a version.
+- `SECURITY.md` still described "one fixed shell script per platform" and a payload that predated disk activity.
+- The bug-report template's version placeholder said `v0.1.0`, and its contact link still offered help with the removed collectors.
+
+### Changed
+
+- The client slot id is now `windows-local-monitor`, matching the plugin's name. It had stayed `system-local-monitor` from before the rename — the sweep missed it because the string never contained `system-monitor`.
+
 ## [0.2.1] - 2026-10-16
 
 Metadata only; no behaviour changed.

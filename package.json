@@ -1,6 +1,6 @@
 {
   "name": "dsh-windows-monitor",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "System monitor overlay for DeepSeek Harness: a compact corner pill showing CPU and memory, expandable into a detail card with disk activity and throughput, per-volume capacity, network, uptime and battery. Windows only.",
   "type": "module",
   "main": "lib/index.js",
