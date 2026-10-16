@@ -7,7 +7,7 @@
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的本机状态面板：右下角一枚紧凑胶囊，实时显示 CPU 与内存占用，点击展开为明细卡片——磁盘活动与读写吞吐、各磁盘空间、网络状态、连续运行时长与电池。
 
-支持 **Windows、Linux 与 macOS**。
+支持 **Windows**。
 
 ![折叠态与展开态](docs/preview.png)
 
@@ -26,33 +26,31 @@
 ## 环境要求
 
 - DeepSeek Harness，使用 **Web** profile 与当前的 profile bundle 机制。
+- **Windows。** host 进程必须运行在 Windows 上，见[平台支持](#平台支持)。
 - 从源码构建需要 Node.js `^22.19.0 || >=24.0.0`。
-- 下列受支持平台之一。
 
 不需要管理员权限，不会向系统级位置安装任何东西。
 
 ## 平台支持
 
-每个平台一个采集器，各自是一条只读 shell 命令。host 按 `process.platform` 选择，**不由请求决定**。
+仅支持 Windows，且这是**刻意的取舍**。插件以 Windows 命名，招牌读数（磁盘活动）来自 Windows 性能计数器，而**作者跑不起来的采集器，就是作者复现不了 bug 的采集器**。此前附带的 Linux 与 macOS 采集器是照文档写出来的、作者从未在自己机器上执行过——那等于用一个兑现不了的承诺，换来两条维护不了的分支。
 
-| 平台 | 数据来源 | 验证状态 |
-|---|---|---|
-| **Windows** | PowerShell + CIM/WMI（`Win32_Processor`、`Win32_OperatingSystem`、`Win32_LogicalDisk`、`Win32_Battery`、`Win32_PerfFormattedData_PerfDisk_PhysicalDisk`）与 `Get-NetAdapter` | 作者已在 Windows 11 上验证，含磁盘活动 |
-| **Linux** | `/proc/stat`、`/proc/meminfo`、`/proc/uptime`、`/sys/class/net/*/operstate`、`/sys/class/power_supply/BAT*`、`df -kP` | 作者本机未验证——手边没有 Linux 机器。由 CI 在 `ubuntu-latest` 上真实执行 |
-| **macOS** | `top`、`vm_stat` + `sysctl`、`ifconfig`、`df -kP`、`pmset -g batt` | 作者本机未验证——手边没有 Mac。由 CI 在 `macos-latest` 上真实执行 |
+host 按 `process.platform` 选择采集器，**不由请求决定**。
 
-其他平台会收到明确的「不支持的平台」响应并在面板中呈现——插件不会在跑不起来的地方假装能用。
+| 平台 | 采集器 |
+|---|---|
+| **Windows** | PowerShell + CIM/WMI（`Win32_Processor`、`Win32_OperatingSystem`、`Win32_LogicalDisk`、`Win32_Battery`、`Win32_PerfFormattedData_PerfDisk_PhysicalDisk`）与 `Get-NetAdapter`。作者已在 Windows 11 上验证 |
+| **其他任何平台** | 无。路由返回 `501` 与明确的「不支持的平台」响应体，面板如实呈现，而不是画一堆空表盘 |
 
-Linux 与 macOS 的**事实来源是 CI**，见 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)：矩阵在三种 runner 上跑完整测试，采集器集成测试会在所在平台上真实执行脚本。
+`0.1.0` 确实附带过 `linux` 与 `macOS` 采集器，它们已在 `0.2.0` 移除，见[变更日志](CHANGELOG.md)。
 
-已知采集器限制：
+CI 仍在三个 runner 上跑，这同样是刻意的：`windows-latest` 真实执行采集器，而 `ubuntu-latest` 与 `macos-latest` 验证**反向契约**——没有采集器时必须诚实报错，而不是假装能用。见 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)。
 
-- **磁盘活动目前仅 Windows 支持。** Linux 与 macOS 采集器将其报为未知，面板显示 `--`。欢迎贡献 `/proc/diskstats` 或 `iostat` 的实现。
+已知限制：
+
 - 磁盘活动依赖 Windows 性能计数器服务；该服务被禁用或缺失时，读数降级为 `--`，而不是让整份快照失败。
-- Linux 与 macOS 上，挂载点含空格时会被 `df` 解析截断。
-- Linux 的部分虚拟网卡 `operstate` 显示为 `unknown` 但实际是通的，网卡数可能偏少。
-- macOS 内存采用「活动监视器」的 Memory Used 口径（active + wired + compressed），而不是偏乐观的「可用」口径。
 - 采集器会把进程区域固定为 invariant。事实格式是 `key=value` 且以 `.` 为小数点，否则逗号小数区域会输出无法解析的数字。
+- 部分驱动会把 `PercentDiskTime` 报成 100 以上数倍，这正是繁忙时间改用「空闲的补数」推导的原因。
 
 ## 安装
 
@@ -114,7 +112,7 @@ allowBuilds:
 GET /api/windows-monitor/snapshot
 ```
 
-采集器每行输出一条 `key=value`。选择行格式而非 JSON 是刻意的：在 bash 与 PowerShell 里不依赖 `jq` 而输出正确 JSON 是个可移植性陷阱，而 `key=value` 在任何平台都极易产出，在 TypeScript 侧也极易解析（并单测）。host 把事实转换成客户端渲染的快照，并**自己盖上时间戳**，这样各平台无需在日期格式上达成一致。
+采集器每行输出一条 `key=value`。选择行格式而非 JSON 是刻意的：在 PowerShell 里不依赖 JSON 库而输出正确 JSON 是个可移植性陷阱，而 `key=value` 极易产出，在 TypeScript 侧也极易解析（并单测）。host 把事实转换成客户端渲染的快照，并**自己盖上时间戳**。
 
 结果缓存 5 秒，且并发的轮询会共享同一次进行中的采集而不是互相竞争，因此浏览器的轮询不会成倍放大采集次数。
 
@@ -126,7 +124,7 @@ GET /api/windows-monitor/snapshot
 
 安装前请阅读。
 
-- **所有采集器都是只读的。** 它们读取 `/proc`、`/sys`、CIM/WMI 并运行 `df`/`top`/`vm_stat`/`pmset`，不写入、不安装、不改变机器状态。
+- **采集器是只读的。** 它读取 CIM/WMI 并运行 `Get-NetAdapter`，不写入、不安装、不改变机器状态。
 - **沙箱授权范围较宽。** Host 半边解析 `danger-full-access` 沙箱策略以便执行 shell。命令本身是只读的，但该策略不是——这是最需要审查的一点，代码位于 `src/index.ts` 与 `src/collectors/`。
 - **执行哪条命令由 host 决定，不由浏览器决定。** 平台取自 `process.platform`，请求无法指定另一个采集器。
 - **载荷不含个人数据。** 内容包括主机名、CPU 百分比、内存总量与占用、各磁盘容量与占用、磁盘繁忙时间与读写吞吐、已连接网卡数量、运行小时数，以及存在电池时的电量百分比。不含文件内容、用户名、路径或任何凭据，也不含按进程或按文件的磁盘归属信息。
@@ -144,7 +142,7 @@ pnpm run test
 pnpm run build
 ```
 
-`pnpm run test` 会在任何平台跑解析器测试，外加**当前平台**的采集器集成测试——所以本地只能覆盖你自己的操作系统，三平台要靠 CI。
+`pnpm run test` 会在任何平台跑解析器测试；在 Windows 上额外真实执行采集器，在其他平台上则改为验证**反向契约**——`selectCollector` 返回空、路由返回 `501`，而不是提供空表盘。两者都由 CI 覆盖。
 
 `pnpm run build` 产出 `lib/index.js` + `lib/index.d.ts`（Host，ESM）与 `lib/client.js` + `lib/client.js.map`（Client，包裹在 Harness 期望的 `window.__ModuleLoader__` 外壳中）。
 
@@ -158,7 +156,7 @@ pnpm run build
 
 欢迎提交 issue 与 PR。构建、测试与平台验证流程见 [CONTRIBUTING.md](CONTRIBUTING.md)；安全相关报告请走 [SECURITY.md](SECURITY.md)。
 
-目前最有价值的贡献是**在真机上运行 Linux 或 macOS 采集器**：这两个脚本是照文档写出来的，只在 CI 里跑过，作者从未在真实机器上验证过。把采集器原始的 `key=value` 输出贴到 issue 里就足够定位问题。
+范围是**刻意限定在 Windows** 的，所以最有价值的贡献都来自 Windows：性能计数器服务不可用的机器、en-US 与 zh-CN 以外的小数区域、某个 CIM 类行为异常的 Windows 版本。把采集器原始的 `key=value` 输出贴到 issue 里就足够定位问题。
 
 ## 许可证
 

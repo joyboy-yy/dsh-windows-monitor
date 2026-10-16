@@ -1,8 +1,10 @@
 name: CI
 
-# The collector scripts are platform-specific and cannot all be exercised on one
-# machine, so the matrix IS the verification: ubuntu-latest runs the Linux
-# collector, macos-latest the macOS one, windows-latest the Windows one.
+# Only Windows ships a collector, but the matrix still spans three runners on
+# purpose. windows-latest runs the PowerShell collector for real. ubuntu and
+# macos prove the negative contract: with no collector the plugin must answer
+# the unsupported-platform error, never render empty gauges. That promise is in
+# the README, so it gets a runner rather than a sentence.
 on:
   push:
     branches: [main]

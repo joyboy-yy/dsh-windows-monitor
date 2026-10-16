@@ -5,6 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-10-16
+
+Windows only, by design. `0.1.0` shipped Linux and macOS collectors that were written from documentation and never run by the author on their own hardware; they worked, but they were a promise the project could not maintain. The name says Windows, the headline reading comes from a Windows performance counter, and a collector the maintainer cannot run is a collector whose bugs they cannot reproduce.
+
+### Removed
+
+- **The Linux and macOS collectors.** `src/collectors/linux.ts` and `src/collectors/macos.ts` are gone; `SUPPORTED_PLATFORMS` is now `['win32']`. Hosts on any other platform get the explicit unsupported-platform answer that was already there, instead of a panel that renders empty gauges. Both scripts remain in git history if anyone wants to restore them.
+
+### Changed
+
+- The CI matrix still spans `ubuntu-latest`, `macos-latest` and `windows-latest`, but its purpose changed: `windows-latest` runs the collector for real, while the other two now assert the negative contract — `selectCollector` returns nothing and the route answers `501` with a usable body. That behaviour was documented but untested before this release.
+- README, issue template and contribution guide narrowed to Windows.
+
 ## [0.1.0] - 2026-10-16
 
 The first public release. Tagged `v0.1.0` and published to npm as [`dsh-windows-monitor`](https://www.npmjs.com/package/dsh-windows-monitor).

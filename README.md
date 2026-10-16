@@ -7,7 +7,7 @@ English | [简体中文](README.zh.md)
 
 A system monitor overlay for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): a compact pill in the bottom-right corner showing live CPU and memory, expanding into a detail card with disk activity and throughput, per-volume capacity, network state, uptime and battery.
 
-Runs on **Windows, Linux and macOS**.
+Runs on **Windows**.
 
 ![Collapsed and expanded states](docs/preview.png)
 
@@ -26,33 +26,31 @@ Runs on **Windows, Linux and macOS**.
 ## Requirements
 
 - DeepSeek Harness with the **Web** profile and the current profile-bundle system.
+- **Windows.** The host process must be running on Windows; see [Platform support](#platform-support).
 - Node.js `^22.19.0 || >=24.0.0` (to build from source).
-- One of the supported platforms below.
 
 No administrator rights are needed, and nothing is installed system-wide.
 
 ## Platform support
 
-One collector per platform, each a single read-only shell command. The host picks one from `process.platform`, never from the request.
+Windows only, and that is deliberate. The plugin is named for Windows, its headline reading (disk activity) comes from a Windows performance counter, and a collector the maintainer cannot run is a collector whose bugs they cannot reproduce. Shipping Linux and macOS collectors that were written from documentation — and that the author could never exercise on their own hardware — traded a promise the project could not keep for two code paths it could not maintain.
 
-| Platform | Sources | Verification |
-|---|---|---|
-| **Windows** | PowerShell + CIM/WMI (`Win32_Processor`, `Win32_OperatingSystem`, `Win32_LogicalDisk`, `Win32_Battery`, `Win32_PerfFormattedData_PerfDisk_PhysicalDisk`) and `Get-NetAdapter` | Verified by the author on Windows 11, including disk activity |
-| **Linux** | `/proc/stat`, `/proc/meminfo`, `/proc/uptime`, `/sys/class/net/*/operstate`, `/sys/class/power_supply/BAT*`, `df -kP` | Not verified by the author locally — no Linux machine was available. CI executes it for real on `ubuntu-latest` |
-| **macOS** | `top`, `vm_stat` + `sysctl`, `ifconfig`, `df -kP`, `pmset -g batt` | Not verified by the author locally — no Mac was available. CI executes it for real on `macos-latest` |
+The host picks the collector from `process.platform`, never from the request.
 
-Any other platform gets an explicit unsupported-platform answer on the route, rendered by the panel — the plugin never pretends to work where it cannot.
+| Platform | Collector |
+|---|---|
+| **Windows** | PowerShell + CIM/WMI (`Win32_Processor`, `Win32_OperatingSystem`, `Win32_LogicalDisk`, `Win32_Battery`, `Win32_PerfFormattedData_PerfDisk_PhysicalDisk`) and `Get-NetAdapter`. Verified by the author on Windows 11 |
+| **Anything else** | None. The route answers `501` with an explicit unsupported-platform body, and the panel renders that instead of empty gauges |
 
-CI is the source of truth for Linux and macOS. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — the matrix runs the suite on all three runners, and the collector integration test executes the script for whichever platform it is on.
+`linux` and `macOS` collectors did ship in `0.1.0`; they were removed in `0.2.0`. See the [changelog](CHANGELOG.md).
 
-Known collector limitations:
+CI still runs on all three runners, and that is also deliberate. `windows-latest` exercises the collector for real, while `ubuntu-latest` and `macos-latest` prove the negative contract: with no collector the plugin must answer the error rather than pretend. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
-- **Disk activity is Windows-only.** The Linux and macOS collectors report it as unknown, and the panel shows `--`. Contributions adding `/proc/diskstats` or `iostat` support are welcome.
+Known limitations:
+
 - Disk activity needs the Windows performance-counter provider. On a host where it is disabled or missing, the reading degrades to `--` instead of failing the snapshot.
-- Mount points containing spaces are truncated by `df` parsing on Linux and macOS.
-- Linux `operstate` reports `unknown` for some virtual interfaces that are in fact up, so the adapter count can undercount.
-- macOS memory follows Activity Monitor's "Memory Used" (active + wired + compressed), not an optimistic "available" figure.
-- The collectors pin the process culture to invariant. The fact format is `key=value` with `.` as the decimal separator, so a comma-decimal locale would otherwise emit unparseable numbers.
+- The collector pins the process culture to invariant. The fact format is `key=value` with `.` as the decimal separator, so a comma-decimal locale would otherwise emit unparseable numbers.
+- Some drivers report `PercentDiskTime` several times above 100, which is why busy time is derived from the idle complement instead.
 
 ## Install
 
@@ -114,7 +112,7 @@ The **Host half** registers one read-only route and runs the collector for its o
 GET /api/windows-monitor/snapshot
 ```
 
-The collector prints one `key=value` fact per line. A line format — rather than JSON — is deliberate: emitting correct JSON from bash and PowerShell without assuming `jq` is a portability trap, whereas `key=value` is trivial to produce everywhere and trivial to parse (and unit-test) on the TypeScript side. The host converts facts into the snapshot the client renders and stamps the timestamp itself, so no two platforms have to agree on date formatting.
+The collector prints one `key=value` fact per line. A line format — rather than JSON — is deliberate: emitting correct JSON from PowerShell without assuming a JSON library is a portability trap, whereas `key=value` is trivial to produce and trivial to parse (and unit-test) on the TypeScript side. The host converts facts into the snapshot the client renders and stamps the timestamp itself.
 
 Results are cached for 5 seconds, and concurrent polls share a single in-flight collection instead of racing, so the browser's polling never multiplies collector runs.
 
@@ -126,7 +124,7 @@ Neither half touches the model, the session, or the transcript. The plugin regis
 
 Read this before installing.
 
-- **Every collector is read-only.** They read `/proc`, `/sys`, CIM/WMI and run `df`/`top`/`vm_stat`/`pmset`. Nothing writes, installs, or changes machine state.
+- **The collector is read-only.** It reads CIM/WMI and runs `Get-NetAdapter`. Nothing writes, installs, or changes machine state.
 - **The sandbox grant is broad.** The Host half resolves the `danger-full-access` sandbox policy so the shell can run. The commands are read-only, but the policy is not — it is the main thing to review, and it lives in `src/index.ts` and `src/collectors/`.
 - **The command is chosen by the host, not the browser.** The platform comes from `process.platform`; a request cannot select a different collector.
 - **The payload carries no personal data.** It contains the host name, CPU percentage, memory totals and usage, per-volume capacity and usage, disk busy time and read/write throughput, a connected-adapter count, uptime hours, and battery percentage when a battery exists. No file contents, no usernames, no paths, no credentials, and no per-process or per-file disk attribution.
@@ -144,7 +142,7 @@ pnpm run test
 pnpm run build
 ```
 
-`pnpm run test` runs the parser suite everywhere plus the collector integration test for the current platform, so running it locally only exercises your own OS. Run it on all three through CI.
+`pnpm run test` runs the parser suite everywhere plus the collector integration test on Windows. On any other platform it instead asserts the unsupported-platform contract — that `selectCollector` returns nothing and the route answers `501` rather than serving empty gauges. CI covers both.
 
 `pnpm run build` produces `lib/index.js` + `lib/index.d.ts` (Host, ESM) and `lib/client.js` + `lib/client.js.map` (Client, wrapped in the `window.__ModuleLoader__` envelope the harness expects).
 
@@ -156,9 +154,9 @@ The collector scripts are JavaScript template literals, so a literal `${` would 
 
 ## Contributing
 
-Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the build, test and platform-verification workflow; security-relevant reports go through [SECURITY.md](SECURITY.md).
+Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the build, test and verification workflow; security-relevant reports go through [SECURITY.md](SECURITY.md).
 
-The most useful contribution right now is running the **Linux** or **macOS** collector on real hardware: both scripts were written from documentation and are exercised only by CI, never by the author on a real machine. A report with the raw `key=value` output is enough to fix them.
+The scope is intentionally Windows-only, so the most useful contributions are Windows ones: a machine where the performance-counter provider is unavailable, a locale other than en-US or zh-CN, a Windows build where a CIM class behaves differently. A report with the raw `key=value` output is enough to work from.
 
 ## License
 

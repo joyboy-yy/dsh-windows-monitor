@@ -107,8 +107,14 @@ export const COLLECT_TIMEOUT_MS = 8_000
 /** Upper bound on captured stdout; the fact list is well under a kilobyte. */
 export const STDOUT_MAX_BYTES = 65_536
 
-/** Platforms with a shipped collector. */
-export const SUPPORTED_PLATFORMS = ['win32', 'linux', 'darwin'] as const
+/**
+ * Platforms with a shipped collector.
+ *
+ * A host on anything else gets an explicit unsupported-platform answer rather
+ * than a panel that renders empty gauges, so this list is also the set of
+ * platforms the plugin claims to work on.
+ */
+export const SUPPORTED_PLATFORMS = ['win32'] as const
 
 /** One of {@link SUPPORTED_PLATFORMS}. */
 export type SupportedPlatform = (typeof SUPPORTED_PLATFORMS)[number]

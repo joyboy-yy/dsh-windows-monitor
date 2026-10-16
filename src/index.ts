@@ -76,9 +76,16 @@ function createReader(ctx: PluginContext, collector: Collector): () => Promise<S
   }
 }
 
-/** Mount the snapshot route for the lifetime of this plugin. */
-export function apply(ctx: PluginContext): void {
-  const platform = process.platform
+/**
+ * Mount the snapshot route for the lifetime of this plugin.
+ *
+ * @param ctx - the Cordis context slice.
+ * @param platform - the platform to collect for. Defaults to the running host
+ *   process, and is injectable so the unsupported-platform path can be
+ *   exercised on a machine that does have a collector. Cordis always calls this
+ *   with one argument, so the default is what ships.
+ */
+export function apply(ctx: PluginContext, platform: string = process.platform): void {
   const collector = selectCollector(platform)
   const snapshot = collector === undefined ? undefined : createReader(ctx, collector)
 

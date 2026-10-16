@@ -78,6 +78,14 @@ interface PluginContext {
 //#region src/index.d.ts
 /** Cordis services this plugin cannot start without. */
 export declare const inject: readonly ["shell", "sandboxPolicy", "webServer"];
-/** Mount the snapshot route for the lifetime of this plugin. */
-export declare function apply(ctx: PluginContext): void;
+/**
+ * Mount the snapshot route for the lifetime of this plugin.
+ *
+ * @param ctx - the Cordis context slice.
+ * @param platform - the platform to collect for. Defaults to the running host
+ *   process, and is injectable so the unsupported-platform path can be
+ *   exercised on a machine that does have a collector. Cordis always calls this
+ *   with one argument, so the default is what ships.
+ */
+export declare function apply(ctx: PluginContext, platform?: string): void;
 //#endregion
