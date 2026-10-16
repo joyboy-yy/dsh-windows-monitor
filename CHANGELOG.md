@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-10-16
+
+### Fixed
+
+- **The README image was still broken on npm, and `0.2.2`'s fix was wrong.** That release pointed it at `gcore.jsdelivr.net` on the strength of a single 4/4 measurement. Re-testing gave 0/4, and every GitHub-backed CDN measured 0–1 successes in 4 from the maintainer's network: `raw.githubusercontent.com`, `cdn.jsdelivr.net`, `gcore.jsdelivr.net`, `fastly.jsdelivr.net`, `cdn.statically.io`, `raw.githack.com`. A one-shot measurement had been mistaken for a stable result — the same error this project already caught once, with `raw.githubusercontent.com`.
+
+  The image now ships **inside the package**: `docs/preview.png` joined `files`, and the README points at `https://unpkg.com/dsh-windows-monitor/docs/preview.png`, which serves npm tarball contents. unpkg answered 4/4 where the alternatives answered 0–1/4, and served this package's own files 3/3, measured across three separate sessions. The cost is ~30 KB on the published tarball — a deliberate trade for an image that actually loads.
+
 ## [0.2.2] - 2026-10-16
 
 Everything here was visible on the **npm page**, which renders its README from the published tarball rather than from the repository — so none of it was fixed by pushing to `main`.

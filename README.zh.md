@@ -9,7 +9,7 @@
 
 支持 **Windows**。
 
-![折叠态与展开态](https://gcore.jsdelivr.net/gh/joyboy-yy/dsh-windows-monitor@main/docs/preview.png)
+![折叠态与展开态](https://unpkg.com/dsh-windows-monitor/docs/preview.png)
 
 ## 特性
 
