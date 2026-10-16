@@ -11,7 +11,7 @@
 
 import { selectCollector, type Collector } from './collectors/index.js'
 import { parseFacts } from './collectors/format.js'
-import type { HttpResponseLike, PluginContext, ResolvedSandboxPolicy } from './harness.js'
+import type { HttpResponseLike, PluginContext, ResolvedSandboxPolicy, ShellResult, ShellService, ShellSpec } from './harness.js'
 import {
   CACHE_TTL_MS,
   COLLECT_TIMEOUT_MS,
@@ -34,6 +34,30 @@ function sendJson(res: HttpResponseLike, status: number, body: unknown, head: bo
   res.end(head ? undefined : JSON.stringify(body))
 }
 
+/**
+ * Run one prepared spec over whichever execution entry point this host exposes.
+ *
+ * DSH renamed the entry point: current versions expose
+ * `execute(spec)`, which resolves with a handle whose `result()` projection
+ * carries the foreground outcome. Older versions exposed `run(spec)`, returning
+ * that outcome directly. `resolve()` is unchanged across both, so this prefers
+ * the current call and falls back to the older one rather than pinning the
+ * plugin to a single harness version — a plugin that hard-codes `run` fails
+ * outright on a current harness with "ctx.shell.run is not a function".
+ *
+ * @throws {Error} when the seam exposes neither entry point, which means the
+ *         host is not a shape this plugin knows how to drive.
+ */
+async function runSpec(shell: ShellService, spec: ShellSpec): Promise<ShellResult> {
+  if (typeof shell.execute === 'function') {
+    return await (await shell.execute(spec)).result()
+  }
+  if (typeof shell.run === 'function') {
+    return await shell.run(spec)
+  }
+  throw new Error('ctx.shell exposes neither execute(spec) nor run(spec)')
+}
+
 /** Build the snapshot reader bound to one plugin fiber. */
 function createReader(ctx: PluginContext, collector: Collector): () => Promise<Snapshot> {
   let cached: Snapshot | undefined
@@ -52,7 +76,7 @@ function createReader(ctx: PluginContext, collector: Collector): () => Promise<S
       stdoutMaxBytes: STDOUT_MAX_BYTES,
       sandboxPolicy,
     })
-    const result = await ctx.shell.run(spec)
+    const result = await runSpec(ctx.shell, spec)
     if (result.exitCode !== 0) {
       throw new Error(result.stderr.text.trim() || `${collector.label} exited with code ${result.exitCode}`)
     }

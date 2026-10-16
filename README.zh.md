@@ -114,6 +114,8 @@ GET /api/windows-monitor/snapshot
 
 采集器每行输出一条 `key=value`。选择行格式而非 JSON 是刻意的：在 PowerShell 里不依赖 JSON 库而输出正确 JSON 是个可移植性陷阱，而 `key=value` 极易产出，在 TypeScript 侧也极易解析（并单测）。host 把事实转换成客户端渲染的快照，并**自己盖上时间戳**。
 
+shell seam 的**两个入口都会驱动**。DSH 把 `ctx.shell.run(spec)` 改名为 `ctx.shell.execute(spec)`，后者 resolve 出一个句柄，由它的 `result()` 投影带回执行结果，因此 host 优先用 `execute`、回退到 `run`。写死其中任何一个，都会在只提供另一个的 harness 版本上直接失效——`0.2.3` 正是如此，每次轮询都返回 `ctx.shell.run is not a function`。`tests/collectors.test.ts` 现在覆盖两条路径，外加两者都不存在的情况。
+
 结果缓存 5 秒，且并发的轮询会共享同一次进行中的采集而不是互相竞争，因此浏览器的轮询不会成倍放大采集次数。
 
 **Client 半边**注册到全框层的 `shell.overlay` 插槽。该层本身是点击穿透的——面板主动选择接收指针事件，因此不会挡住底下的应用。

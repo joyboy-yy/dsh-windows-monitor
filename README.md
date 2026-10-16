@@ -114,6 +114,8 @@ GET /api/windows-monitor/snapshot
 
 The collector prints one `key=value` fact per line. A line format — rather than JSON — is deliberate: emitting correct JSON from PowerShell without assuming a JSON library is a portability trap, whereas `key=value` is trivial to produce and trivial to parse (and unit-test) on the TypeScript side. The host converts facts into the snapshot the client renders and stamps the timestamp itself.
 
+The shell seam is driven through **both** of its entry points. DSH renamed `ctx.shell.run(spec)` to `ctx.shell.execute(spec)`, which resolves with a handle whose `result()` carries the outcome, so the host prefers `execute` and falls back to `run`. Hard-coding either one breaks the plugin on the harness versions that expose the other — `0.2.3` did exactly that and answered every poll with `ctx.shell.run is not a function`. `tests/collectors.test.ts` now covers both, plus a seam with neither.
+
 Results are cached for 5 seconds, and concurrent polls share a single in-flight collection instead of racing, so the browser's polling never multiplies collector runs.
 
 The **Client half** registers into the frame-wide `shell.overlay` slot. That layer is click-through by design — the panel opts into pointer events, so it never blocks the app underneath.

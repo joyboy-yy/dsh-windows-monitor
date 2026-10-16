@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4] - 2026-10-16
+
+### Fixed
+
+- **The host half could not collect anything on a current harness.** It called `ctx.shell.run(spec)`, which no longer exists: DSH renamed the entry point to `execute(spec)`, resolving with a handle whose `result()` projection carries the outcome. Every poll answered `采集失败：ctx.shell.run is not a function` — the panel rendered, the route was served, and only the collection failed. The plugin now prefers `execute(spec)` and falls back to `run(spec)`, driving both the current and the older seam.
+
+  This is the failure that shipping untested code earns. `0.1.0` through `0.2.3` passed typecheck, a 24-case suite and CI on three platforms — none of which ever loaded the plugin into a running harness. The first real installation found it in seconds. Four cases now cover the seam: `execute`, `run`, neither, and a non-zero exit.
+
+  Worth recording what the report *did* prove: the panel rendered the error, so the client bundle loaded, the slot registration worked, `ctx.effect` and `ctx.webServer.register` were accepted, and `ctx.sandboxPolicy.resolve` returned. Only the shell call was wrong.
+
 ## [0.2.3] - 2026-10-16
 
 ### Fixed

@@ -44,10 +44,32 @@ export interface ShellSpec extends ShellRequest {
   readonly [key: string]: unknown
 }
 
-/** Command execution seam. */
+/**
+ * Handle for one prepared execution.
+ *
+ * Awaiting its `result()` projection is what makes a command a foreground run;
+ * "foreground" is a property of what the caller awaits, not of the spawn.
+ */
+export interface ShellExecution {
+  /** Resolves when the command settles. Rejects only for infrastructure failures. */
+  result(): Promise<ShellResult>
+}
+
+/**
+ * Command execution seam.
+ *
+ * Both entry points are optional because DSH renamed them: `execute(spec)` is
+ * the current one and resolves with a handle, while `run(spec)` is the older
+ * one that returned the result directly. Declaring only one would make this
+ * plugin silently wrong against the harness versions that expose the other, so
+ * the caller probes and prefers `execute`.
+ */
 export interface ShellService {
   resolve(request: ShellRequest): ShellSpec
-  run(spec: ShellSpec): Promise<ShellResult>
+  /** Current entry point. */
+  execute?(spec: ShellSpec): Promise<ShellExecution>
+  /** Entry point used before the rename. */
+  run?(spec: ShellSpec): Promise<ShellResult>
 }
 
 /** Sandbox policy seam. */

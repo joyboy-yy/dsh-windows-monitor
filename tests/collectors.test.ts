@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest'
 import { COLLECTORS, selectCollector } from '../src/collectors/index.js'
 import { parseFacts } from '../src/collectors/format.js'
 import { apply } from '../src/index.js'
-import type { PluginContext, WebServerRoute } from '../src/harness.js'
+import type { PluginContext, ShellRequest, ShellService, ShellSpec, WebServerRoute } from '../src/harness.js'
 import { SNAPSHOT_ROUTE, type SnapshotError } from '../src/protocol.js'
 
 const collector = selectCollector(process.platform)
@@ -59,10 +59,11 @@ describe('collector scripts', () => {
  * Build the smallest context the host half accepts, and capture the route it
  * registers. `effect` runs its callback immediately, as Cordis does on apply.
  *
- * The shell seam throws rather than answering, so a test that reaches it fails
- * loudly instead of quietly exercising a collector that should not exist here.
+ * The default shell seam throws rather than answering, so a test that reaches
+ * it fails loudly instead of quietly exercising a collector that should not
+ * exist on that platform. Pass `shell` to supply a working one.
  */
-function captureRoute(platform: string): WebServerRoute {
+function captureRoute(platform: string, shell?: ShellService): WebServerRoute {
   let route: WebServerRoute | undefined
   const ctx: PluginContext = {
     effect: (callback) => {
@@ -76,12 +77,12 @@ function captureRoute(platform: string): WebServerRoute {
       },
     },
     sandboxPolicy: { resolve: () => ({}) },
-    shell: {
+    shell: shell ?? {
       resolve: () => {
         throw new Error('the shell must not resolve on a platform without a collector')
       },
-      run: async () => {
-        throw new Error('the shell must not run on a platform without a collector')
+      execute: async () => {
+        throw new Error('the shell must not execute on a platform without a collector')
       },
     },
   }
@@ -138,6 +139,85 @@ describe('unsupported platform', () => {
 
   it('registers the route for the host platform as well', () => {
     expect(captureRoute(process.platform).path).toBe(SNAPSHOT_ROUTE)
+  })
+})
+
+/**
+ * DSH renamed `ctx.shell.run(spec)` to `ctx.shell.execute(spec)`, which resolves
+ * with a handle whose `result()` carries the outcome. Both are supported here;
+ * a plugin that knows only one of them fails on the hosts exposing the other —
+ * which is exactly what `0.2.3` did, reporting "ctx.shell.run is not a
+ * function" on a current harness.
+ */
+describe('shell execution entry point', () => {
+  const FACTS = [
+    'computer=DEVBOX',
+    'cpu=7',
+    'mem_total_mb=16384',
+    'mem_used_mb=8192',
+    'uptime_s=3600',
+    'net_up=2',
+    'disk=C:|500.0|100.0',
+  ].join('\n')
+
+  const ok = { exitCode: 0, stdout: { text: FACTS }, stderr: { text: '' } }
+  const resolve = (request: ShellRequest): ShellSpec => ({ ...request, resolved: true })
+
+  it('drives the current execute(spec) handle', async () => {
+    let resolved = 0
+    const route = captureRoute('win32', {
+      resolve: (request) => {
+        resolved += 1
+        return resolve(request)
+      },
+      execute: async () => ({ result: async () => ok }),
+    })
+
+    const { status, body } = await callRoute(route, 'GET')
+
+    expect(status).toBe(200)
+    expect(resolved).toBe(1)
+    expect((JSON.parse(body) as { computer: string }).computer).toBe('DEVBOX')
+  })
+
+  it('falls back to the older run(spec)', async () => {
+    let resolved = 0
+    const route = captureRoute('win32', {
+      resolve: (request) => {
+        resolved += 1
+        return resolve(request)
+      },
+      run: async () => ok,
+    })
+
+    const { status, body } = await callRoute(route, 'GET')
+
+    expect(status).toBe(200)
+    expect(resolved).toBe(1)
+    expect((JSON.parse(body) as { computer: string }).computer).toBe('DEVBOX')
+  })
+
+  it('reports a seam that exposes neither entry point', async () => {
+    const route = captureRoute('win32', { resolve })
+
+    const { status, body } = await callRoute(route, 'GET')
+
+    expect(status).toBe(500)
+    expect((JSON.parse(body) as { error: string }).error).toContain('neither execute(spec) nor run(spec)')
+  })
+
+  it('surfaces a non-zero collector exit as a failure', async () => {
+    const route = captureRoute('win32', {
+      resolve,
+      execute: async () => ({
+        result: async () => ({ exitCode: 1, stdout: { text: '' }, stderr: { text: 'boom' } }),
+      }),
+    })
+
+    const { status, body } = await callRoute(route, 'GET')
+
+    expect(status).toBe(500)
+    expect((JSON.parse(body) as { error: string }).error).toBe('boom')
   })
 })
 
