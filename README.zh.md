@@ -38,8 +38,8 @@
 | 平台 | 数据来源 | 验证状态 |
 |---|---|---|
 | **Windows** | PowerShell + CIM/WMI（`Win32_Processor`、`Win32_OperatingSystem`、`Win32_LogicalDisk`、`Win32_Battery`、`Win32_PerfFormattedData_PerfDisk_PhysicalDisk`）与 `Get-NetAdapter` | 作者已在 Windows 11 上验证，含磁盘活动 |
-| **Linux** | `/proc/stat`、`/proc/meminfo`、`/proc/uptime`、`/sys/class/net/*/operstate`、`/sys/class/power_supply/BAT*`、`df -kP` | **作者未在真机验证**——手边没有 Linux 机器。由 CI 在 `ubuntu-latest` 上执行 |
-| **macOS** | `top`、`vm_stat` + `sysctl`、`ifconfig`、`df -kP`、`pmset -g batt` | **作者未在真机验证**——手边没有 Mac。由 CI 在 `macos-latest` 上执行 |
+| **Linux** | `/proc/stat`、`/proc/meminfo`、`/proc/uptime`、`/sys/class/net/*/operstate`、`/sys/class/power_supply/BAT*`、`df -kP` | 作者本机未验证——手边没有 Linux 机器。由 CI 在 `ubuntu-latest` 上真实执行 |
+| **macOS** | `top`、`vm_stat` + `sysctl`、`ifconfig`、`df -kP`、`pmset -g batt` | 作者本机未验证——手边没有 Mac。由 CI 在 `macos-latest` 上真实执行 |
 
 其他平台会收到明确的「不支持的平台」响应并在面板中呈现——插件不会在跑不起来的地方假装能用。
 

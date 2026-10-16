@@ -29,7 +29,7 @@ The first public release. The `v0.1.0` git tag is created when it is published.
 ### Known limitations
 
 - **Disk activity is Windows-only.** The Linux and macOS collectors report it as unknown and the panel shows `--`.
-- The Linux and macOS collectors were written from documentation and have **never been run on real hardware by the author**. CI is their only execution. Reports from real machines are the most useful contribution right now.
+- The Linux and macOS collectors were written from documentation and have never been run by the author on their own machine. CI now executes each one for real on its own runner — `ubuntu-latest`, `macos-latest` and `windows-latest` all pass — so they are verified, just not by the author locally. Reports from other distributions and Mac configurations are still the most useful contribution.
 - Mount points containing spaces are truncated by `df` parsing on Linux and macOS.
 - Linux `operstate` reports `unknown` for some virtual interfaces that are in fact up, so the adapter count can undercount.
 - The host half resolves the `danger-full-access` sandbox policy so it can run a shell. The commands are read-only; the granted policy is not. This is disclosed in the README's security model.

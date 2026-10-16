@@ -38,8 +38,8 @@ One collector per platform, each a single read-only shell command. The host pick
 | Platform | Sources | Verification |
 |---|---|---|
 | **Windows** | PowerShell + CIM/WMI (`Win32_Processor`, `Win32_OperatingSystem`, `Win32_LogicalDisk`, `Win32_Battery`, `Win32_PerfFormattedData_PerfDisk_PhysicalDisk`) and `Get-NetAdapter` | Verified by the author on Windows 11, including disk activity |
-| **Linux** | `/proc/stat`, `/proc/meminfo`, `/proc/uptime`, `/sys/class/net/*/operstate`, `/sys/class/power_supply/BAT*`, `df -kP` | **Not verified on real hardware by the author** — no Linux machine was available. CI runs it on `ubuntu-latest` |
-| **macOS** | `top`, `vm_stat` + `sysctl`, `ifconfig`, `df -kP`, `pmset -g batt` | **Not verified on real hardware by the author** — no Mac was available. CI runs it on `macos-latest` |
+| **Linux** | `/proc/stat`, `/proc/meminfo`, `/proc/uptime`, `/sys/class/net/*/operstate`, `/sys/class/power_supply/BAT*`, `df -kP` | Not verified by the author locally — no Linux machine was available. CI executes it for real on `ubuntu-latest` |
+| **macOS** | `top`, `vm_stat` + `sysctl`, `ifconfig`, `df -kP`, `pmset -g batt` | Not verified by the author locally — no Mac was available. CI executes it for real on `macos-latest` |
 
 Any other platform gets an explicit unsupported-platform answer on the route, rendered by the panel — the plugin never pretends to work where it cannot.
 
