@@ -32,11 +32,11 @@ export interface DiskSnapshot {
  * working right now" and changes every second. Rendering one as the other is
  * what makes a storage gauge look stuck next to a live CPU reading.
  *
- * Every field is nullable because the reading is best-effort: on Windows it
- * needs the performance-counter provider, and the Linux and macOS collectors
- * do not report it at all. `null` means unknown, which the panel renders as
- * `--` rather than `0%` — a zero would be a claim about an idle disk that no
- * collector actually made.
+ * Every field is nullable because the reading is best-effort: it needs the
+ * Windows performance-counter provider, which a host may have disabled or not
+ * have at all. `null` means unknown, which the panel renders as `--` rather
+ * than `0%` — a zero would be a claim about an idle disk that nothing actually
+ * measured.
  */
 export interface DiskActivitySnapshot {
   /** Share of the interval spent servicing requests, 0-100, or `null`. */

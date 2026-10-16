@@ -66,9 +66,9 @@ describe('parseFacts', () => {
   })
 
   it('reports absent disk activity as unknown, never as zero', () => {
-    // The Linux and macOS collectors report no activity at all, and a Windows
-    // host without the perf provider reports none either. Both must stay
-    // distinguishable from a genuinely idle disk.
+    // A Windows host without the performance-counter provider reports no
+    // activity at all. That must stay distinguishable from a genuinely idle
+    // disk, which is why the parser yields null rather than zero.
     const text = FULL.split('\n')
       .filter((line) => !line.startsWith('disk_'))
       .join('\n')

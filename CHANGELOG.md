@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-10-16
+
+Metadata only; no behaviour changed.
+
+### Fixed
+
+- The published `description` still ended with "Collectors for Windows, Linux and macOS", which `0.2.0` had just stopped being true. The repository description was updated at release time but the manifest was missed. Because npm refuses to republish a version, the correction ships as `0.2.1`.
+- Two comments still referred to the removed Linux and macOS collectors: one in `src/protocol.ts`, and one on a runtime function in `src/collectors/format.ts` that the bundler preserves — so the latter shipped inside `lib/index.js` in the `0.2.0` tarball. Found by grepping the built output rather than the source, which is how the first pass missed it.
+
 ## [0.2.0] - 2026-10-16
 
 Windows only, by design. `0.1.0` shipped Linux and macOS collectors that were written from documentation and never run by the author on their own hardware; they worked, but they were a promise the project could not maintain. The name says Windows, the headline reading comes from a Windows performance counter, and a collector the maintainer cannot run is a collector whose bugs they cannot reproduce.

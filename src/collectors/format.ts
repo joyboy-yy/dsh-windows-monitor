@@ -33,9 +33,8 @@ function percentOf(part: number, whole: number): number {
  * Read a fact that may legitimately be absent into `number | null`.
  *
  * Disk activity is optional: the Windows collector emits it only when the
- * performance-counter provider answers, and the Linux and macOS collectors do
- * not emit it at all. Absent must stay distinguishable from zero, so this
- * returns `null` rather than coercing to 0.
+ * performance-counter provider answers. Absent must stay distinguishable from
+ * zero, so this returns `null` rather than coercing to 0.
  */
 function optionalNumber(facts: Map<string, string>, key: string): number | null {
   const raw = facts.get(key)
