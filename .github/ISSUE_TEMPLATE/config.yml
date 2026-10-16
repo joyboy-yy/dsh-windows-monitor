@@ -3,6 +3,6 @@ contact_links:
   - name: Security vulnerability
     url: https://github.com/joyboy-yy/dsh-windows-monitor/security/policy
     about: Report security issues privately. Please do not open a public issue for them.
-  - name: Linux or macOS collector verification
+  - name: Reporting collector output
     url: https://github.com/joyboy-yy/dsh-windows-monitor/blob/main/CONTRIBUTING.md
-    about: How to report real-hardware output for the two collectors that only CI has ever run.
+    about: How to capture and paste the raw key=value facts from your Windows machine.
