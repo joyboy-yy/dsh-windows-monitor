@@ -81,6 +81,18 @@ function formatGB(value: number | null): string {
   return value === null ? '--' : `${value.toFixed(1)} GB`
 }
 
+/**
+ * A free/total pair stated with one unit, e.g. `412.8 / 1000.0 GB`.
+ *
+ * Repeating "GB" on both numbers overflows the 280 px row on a large volume —
+ * which showed up as an ellipsis swallowing the total, the one number the row
+ * exists to convey.
+ */
+function formatVolume(free: number | null, total: number | null): string {
+  if (free === null || total === null) return formatGB(free ?? total)
+  return `${free.toFixed(1)} / ${total.toFixed(1)} GB`
+}
+
 /** Throughput, kept readable from a trickle to hundreds of MB/s. */
 function formatThroughput(value: number | null): string {
   if (value === null) return ''
@@ -365,7 +377,8 @@ export function Monitor({ ctx }: { ctx: ClientPluginContext }): ReactElement {
           <span>{`${item.name} 磁盘空间`}</span>
           <span
             className={item.usedPct >= DISK_CAPACITY_SEVERITY.warn ? 'sm-alert' : ''}
-          >{`已用 ${item.usedPct}% · 剩余 ${formatGB(item.free)} / ${formatGB(item.total)}`}</span>
+            title={`${item.name} 已用 ${item.usedPct}% · 剩余 ${formatGB(item.free)} / ${formatGB(item.total)}`}
+          >{`已用 ${item.usedPct}% · 剩余 ${formatVolume(item.free, item.total)}`}</span>
         </div>,
       )
     }
