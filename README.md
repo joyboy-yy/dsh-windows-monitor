@@ -80,7 +80,7 @@ dsh plugin --profile web add .\dsh-windows-monitor-<version>.tgz
 From a pinned source tag — see [releases](https://github.com/joyboy-yy/dsh-windows-monitor/releases) for the current one:
 
 ```powershell
-dsh plugin --profile web add github:joyboy-yy/dsh-windows-monitor#v0.2.1
+dsh plugin --profile web add github:joyboy-yy/dsh-windows-monitor#v0.3.0
 ```
 
 A git install fetches source and runs this package's `prepare` build, which means package code executes on your machine outside the agent sandbox. pnpm refuses that until the profile's `pnpm-workspace.yaml` explicitly allows it:
