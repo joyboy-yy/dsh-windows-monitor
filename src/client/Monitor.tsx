@@ -4,16 +4,41 @@
  * Lives in the frame-wide `shell.overlay` slot as a fixed corner surface: a
  * compact pill while collapsed, and a detail card while expanded. Both states
  * share one anchor, so the panel never grows into the middle of the page.
+ *
+ * A drag turns the panel into a free placement; releasing it near an edge
+ * settles it onto one of eight anchors (corners and edge midpoints). Anchored
+ * placements are recomputed on resize, so the recorded gap is what survives,
+ * not the pixel coordinate.
  */
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  type ReactElement,
+} from 'react'
 
 import type { Snapshot, SnapshotError } from '../protocol.js'
 import type { ClientPluginContext } from './harness.js'
 import { Icon } from './icons.js'
-
-/** Distance kept between the panel and the viewport edge, in px. */
-const EDGE = 14
+import {
+  clampToViewport,
+  defaultPlacement,
+  edgeGap,
+  isDefaultPlacement,
+  parsePlacement,
+  resolvePlacement,
+  serializePlacement,
+  settlePlacement,
+  type AnchorPlacement,
+  type Placement,
+  type Point,
+  type Size,
+} from './placement.js'
 
 /** Pointer travel before a press turns into a drag rather than a click, in px. */
 const DRAG_THRESHOLD = 4
@@ -21,22 +46,19 @@ const DRAG_THRESHOLD = 4
 /** How long a drag keeps swallowing clicks, in ms. */
 const CLICK_SUPPRESS_MS = 350
 
+/** How long the settle animation runs, in ms. */
+const SETTLE_MS = 220
+
 /** Poll interval for the snapshot endpoint, in ms. */
 const REFRESH_MS = 10_000
 
-/** Storage key holding a user-dragged position. */
+/** Storage key holding the last placement. Kept from 0.2.4 for migration. */
 const POSITION_KEY = 'dsh-windows-monitor:position'
 
 /** Thresholds for one metric. */
 interface Severity {
   warn: number
   bad: number
-}
-
-/** A dragged panel position in viewport coordinates. */
-interface Position {
-  x: number
-  y: number
 }
 
 /** Drag bookkeeping for the in-flight gesture. */
@@ -48,7 +70,7 @@ interface DragState {
   originY: number
   width: number
   height: number
-  last: Position | null
+  last: Point | null
 }
 
 /** Severity bucket for one percentage; `null` (unknown) has no bucket. */
@@ -102,46 +124,71 @@ function formatThroughput(value: number | null): string {
   return `${Math.round(value)} MB/s`
 }
 
-/** Read the persisted position, tolerating absent or corrupt storage. */
-function readPosition(): Position | null {
+/**
+ * The layout viewport, not `window.innerWidth`.
+ *
+ * `position: fixed` resolves against the layout viewport, which excludes a
+ * document scrollbar; `innerWidth` includes it. Using the same box for the
+ * arithmetic as the browser uses for `right`/`bottom` avoids a one-scrollbar
+ * jump the first time a default-anchored panel is dragged.
+ */
+function readViewport(): Size {
+  const root = document.documentElement
+  return {
+    width: root.clientWidth || window.innerWidth,
+    height: root.clientHeight || window.innerHeight,
+  }
+}
+
+/** Read the persisted placement, tolerating absent or corrupt storage. */
+function readStoredPlacement(): Placement | null {
   try {
-    const raw = window.localStorage.getItem(POSITION_KEY)
-    if (!raw) return null
-    const parsed: unknown = JSON.parse(raw)
-    if (typeof parsed !== 'object' || parsed === null) return null
-    const { x, y } = parsed as Partial<Position>
-    if (typeof x !== 'number' || typeof y !== 'number') return null
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return null
-    return { x, y }
+    return parsePlacement(window.localStorage.getItem(POSITION_KEY))
   } catch {
     return null
   }
 }
 
-/** Persist, or clear, the dragged position. Storage may be unavailable. */
-function writePosition(position: Position | null): void {
+/** Persist, or clear, the last placement. Storage may be unavailable. */
+function writeStoredPlacement(placement: Placement | null): void {
   try {
-    if (position) {
-      window.localStorage.setItem(
-        POSITION_KEY,
-        JSON.stringify({ x: Math.round(position.x), y: Math.round(position.y) }),
-      )
+    if (placement) {
+      window.localStorage.setItem(POSITION_KEY, serializePlacement(placement))
     } else {
       window.localStorage.removeItem(POSITION_KEY)
     }
   } catch {
-    // Private mode or a blocked origin: the in-memory position still applies.
+    // Private mode or a blocked origin: the in-memory placement still applies.
   }
 }
 
-/** Keep a box of the given size fully inside the viewport. */
-function clampPosition(x: number, y: number, width: number, height: number): Position {
-  const maxX = Math.max(EDGE, window.innerWidth - width - EDGE)
-  const maxY = Math.max(EDGE, window.innerHeight - height - EDGE)
-  return {
-    x: Math.min(Math.max(EDGE, x), maxX),
-    y: Math.min(Math.max(EDGE, y), maxY),
+/** Render a free/anchor placement with CSS anchoring, before the first measurement. */
+function fallbackStyle(placement: Placement): CSSProperties {
+  if (placement.kind === 'free') {
+    return { left: placement.x, top: placement.y, right: 'auto', bottom: 'auto', transform: 'none' }
   }
+  const { gap } = placement
+  const style: CSSProperties = { left: 'auto', right: 'auto', top: 'auto', bottom: 'auto' }
+  const transforms: string[] = []
+  if (placement.x === 'left') style.left = gap
+  else if (placement.x === 'right') style.right = gap
+  else {
+    style.left = '50%'
+    transforms.push('translateX(-50%)')
+  }
+  if (placement.y === 'top') style.top = gap
+  else if (placement.y === 'bottom') style.bottom = gap
+  else {
+    style.top = '50%'
+    transforms.push('translateY(-50%)')
+  }
+  if (transforms.length > 0) style.transform = transforms.join(' ')
+  return style
+}
+
+/** Render a measured point. */
+function pointStyle(point: Point): CSSProperties {
+  return { left: point.x, top: point.y, right: 'auto', bottom: 'auto', transform: 'none' }
 }
 
 /**
@@ -204,13 +251,19 @@ export function Monitor({ ctx }: { ctx: ClientPluginContext }): ReactElement {
   const [error, setError] = useState('')
   const [unsupported, setUnsupported] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [position, setPosition] = useState<Position | null>(readPosition)
+  const [viewport, setViewport] = useState<Size>(readViewport)
+  const [placement, setPlacement] = useState<Placement>(
+    () => readStoredPlacement() ?? defaultPlacement(readViewport()),
+  )
+  const [box, setBox] = useState<Size | null>(null)
   const [dragging, setDragging] = useState(false)
+  const [settling, setSettling] = useState(false)
 
   const rootRef = useRef<HTMLDivElement | null>(null)
   const dragRef = useRef<DragState | null>(null)
   const movedRef = useRef(false)
   const suppressClickRef = useRef(0)
+  const settleTimerRef = useRef<number | null>(null)
 
   const refresh = useCallback(async (): Promise<void> => {
     setLoading(true)
@@ -238,33 +291,73 @@ export function Monitor({ ctx }: { ctx: ClientPluginContext }): ReactElement {
     return ctx.interval(() => void refresh(), REFRESH_MS)
   }, [ctx, refresh])
 
-  // Keep a dragged panel inside the viewport, and re-clamp whenever the
-  // footprint changes (expand/collapse, window resize).
+  // A resize is an instruction to re-resolve the recorded anchor: the panel
+  // keeps the same edge gap while the viewport changes around it. Free
+  // placements are clamped by `resolvePlacement` so they cannot fall offscreen.
   useEffect(() => {
-    const reclamp = (): void => {
-      const node = rootRef.current
-      if (!node) return
-      setPosition((current) => {
-        if (current === null) return current
-        const next = clampPosition(current.x, current.y, node.offsetWidth, node.offsetHeight)
-        return next.x === current.x && next.y === current.y ? current : next
-      })
+    const onResize = (): void => {
+      const next = readViewport()
+      setViewport((current) =>
+        current.width === next.width && current.height === next.height ? current : next,
+      )
     }
-    window.addEventListener('resize', reclamp)
-    reclamp()
-    return () => window.removeEventListener('resize', reclamp)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  // Measure the rendered box once and whenever expanding/collapsing changes it.
+  // `useLayoutEffect` runs before paint, so an anchored panel never draws with
+  // the previous state's footprint for a frame.
+  useLayoutEffect(() => {
+    const node = rootRef.current
+    if (!node) return
+    const sync = (): void => {
+      const rect = node.getBoundingClientRect()
+      setBox((current) =>
+        current !== null && current.width === rect.width && current.height === rect.height
+          ? current
+          : { width: rect.width, height: rect.height },
+      )
+    }
+    sync()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(sync)
+    observer.observe(node)
+    return () => observer.disconnect()
   }, [open])
+
+  useEffect(
+    () => () => {
+      if (settleTimerRef.current !== null) window.clearTimeout(settleTimerRef.current)
+    },
+    [],
+  )
+
+  const beginSettle = (): void => {
+    setSettling(true)
+    if (settleTimerRef.current !== null) window.clearTimeout(settleTimerRef.current)
+    settleTimerRef.current = window.setTimeout(() => {
+      settleTimerRef.current = null
+      setSettling(false)
+    }, SETTLE_MS)
+  }
 
   const beginDrag = (event: ReactPointerEvent<HTMLElement>): void => {
     if (event.button !== 0) return
     const target = event.target
     const button = target instanceof Element ? target.closest('button') : null
-    // Buttons nested inside a drag surface keep their own click behavior.
+    // Buttons nested inside a drag surface keep their own click behavior. The
+    // pill itself is a button, so its own press still starts the drag.
     if (button && button !== event.currentTarget) return
     const node = rootRef.current
     if (!node) return
 
     const rect = node.getBoundingClientRect()
+    setBox((current) =>
+      current !== null && current.width === rect.width && current.height === rect.height
+        ? current
+        : { width: rect.width, height: rect.height },
+    )
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -276,6 +369,7 @@ export function Monitor({ ctx }: { ctx: ClientPluginContext }): ReactElement {
       last: null,
     }
     movedRef.current = false
+    setSettling(false)
     try {
       event.currentTarget.setPointerCapture(event.pointerId)
     } catch {
@@ -293,9 +387,16 @@ export function Monitor({ ctx }: { ctx: ClientPluginContext }): ReactElement {
       movedRef.current = true
       setDragging(true)
     }
-    const next = clampPosition(drag.originX + dx, drag.originY + dy, drag.width, drag.height)
+
+    // Zero inset while dragging: the user must be able to reach the actual
+    // edge for the release-time snap test to mean anything.
+    const next = clampToViewport(
+      { x: drag.originX + dx, y: drag.originY + dy },
+      { width: drag.width, height: drag.height },
+      viewport,
+    )
     drag.last = next
-    setPosition(next)
+    setPlacement({ kind: 'free', x: next.x, y: next.y })
   }
 
   const endDrag = (event: ReactPointerEvent<HTMLElement>): void => {
@@ -304,10 +405,24 @@ export function Monitor({ ctx }: { ctx: ClientPluginContext }): ReactElement {
     dragRef.current = null
     setDragging(false)
     if (!movedRef.current) return
-    // The browser fires one click right after pointerup: swallow that single
-    // click, but never a later deliberate one.
-    suppressClickRef.current = Date.now() + CLICK_SUPPRESS_MS
-    if (drag.last) writePosition(drag.last)
+
+    // The pill is a button, so the browser fires one click right after its
+    // pointerup: swallow that single click, but never a later deliberate one.
+    // A card-header drag has no click target of its own, so it needs no guard.
+    if (event.currentTarget.classList.contains('sm-pill')) {
+      suppressClickRef.current = Date.now() + CLICK_SUPPRESS_MS
+    }
+
+    const released = drag.last ?? { x: drag.originX, y: drag.originY }
+    // The pill can grow while the snapshot loads; the last measured box is the
+    // footprint that is actually on screen at release.
+    const size = box ?? { width: drag.width, height: drag.height }
+    const next = settlePlacement(released, size, viewport, edgeGap(viewport))
+    setPlacement(next)
+    writeStoredPlacement(next)
+    // Only a snap moves the panel again after release; animate that hop. A
+    // free drop is already exactly where the pointer left it.
+    if (next.kind === 'anchor') beginSettle()
   }
 
   const toggle = (): void => {
@@ -319,8 +434,11 @@ export function Monitor({ ctx }: { ctx: ClientPluginContext }): ReactElement {
   }
 
   const resetPosition = (): void => {
-    setPosition(null)
-    writePosition(null)
+    setPlacement(defaultPlacement(viewport))
+    // Clearing, rather than writing the default, lets a later launch pick the
+    // gap appropriate for its own viewport width.
+    writeStoredPlacement(null)
+    beginSettle()
   }
 
   const cpu = data ? Number(data.cpu) || 0 : 0
@@ -430,17 +548,24 @@ export function Monitor({ ctx }: { ctx: ClientPluginContext }): ReactElement {
     onPointerCancel: endDrag,
   }
 
-  const rootStyle: CSSProperties | undefined = position
-    ? { left: `${position.x}px`, top: `${position.y}px`, right: 'auto', bottom: 'auto' }
-    : undefined
+  // Before the first measurement the CSS anchor below is already exact for
+  // every edge/corner; once measured, the same position is resolved to pixels
+  // so a resize can be recomputed from the recorded anchor.
+  const point = box === null ? null : resolvePlacement(placement, box, viewport)
+  const rootStyle = point === null ? fallbackStyle(placement) : pointStyle(point)
 
   const live = data !== null && error === ''
 
   return (
-    <div ref={rootRef} className="sm-root" style={rootStyle}>
+    <div
+      ref={rootRef}
+      className={`sm-root${dragging ? ' sm-dragging' : ''}${settling ? ' sm-settling' : ''}`}
+      style={rootStyle}
+      data-placement={placement.kind === 'anchor' ? `${placement.x}-${placement.y}` : 'free'}
+    >
       {open ? (
-        <div className={`sm-card${dragging ? ' dragging' : ''}`}>
-          <div className="sm-head" {...handleProps}>
+        <div className="sm-card">
+          <div className="sm-head" title="按住拖动" {...handleProps}>
             <span className={`sm-dot ${dotStatus}`} />
             <span className="sm-title">{data ? data.computer : '本机状态'}</span>
             <span className={`sm-chip ${status}`}>{statusText}</span>
@@ -480,7 +605,7 @@ export function Monitor({ ctx }: { ctx: ClientPluginContext }): ReactElement {
                 <span className="sm-time">
                   {data ? `更新于 ${new Date(data.timestamp).toLocaleTimeString()}` : '正在建立基线'}
                 </span>
-                {position !== null && (
+                {!isDefaultPlacement(placement, viewport) && (
                   <button type="button" className="sm-reset" onClick={resetPosition} title="把面板放回右下角">
                     复位
                   </button>
@@ -492,14 +617,14 @@ export function Monitor({ ctx }: { ctx: ClientPluginContext }): ReactElement {
       ) : (
         <button
           type="button"
-          className={`sm-pill${dragging ? ' dragging' : ''}`}
+          className="sm-pill"
           onClick={toggle}
           aria-expanded={false}
           aria-label="展开本机状态"
           title={
             data
-              ? `CPU ${cpu}% · 内存 ${memory}% · 磁盘活动 ${activityText} · 磁盘空间峰值 ${capacityPeak ?? '--'}%（点击展开，可拖动）`
-              : '本机状态（点击展开，可拖动）'
+              ? `CPU ${cpu}% · 内存 ${memory}% · 磁盘活动 ${activityText} · 磁盘空间峰值 ${capacityPeak ?? '--'}%（点击展开，可拖动并吸附边缘）`
+              : '本机状态（点击展开，可拖动并吸附边缘）'
           }
           {...handleProps}
         >

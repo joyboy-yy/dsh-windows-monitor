@@ -8,10 +8,12 @@
 export const PANEL_CSS = `
 .sm-root{position:fixed;right:14px;bottom:14px;z-index:80;pointer-events:none;font-family:inherit;color:var(--dsw-alias-label-primary)}
 .sm-root>*{pointer-events:auto}
-.sm-pill,.sm-card{background:var(--dsw-alias-bg-overlay);border:1px solid var(--dsw-alias-border-l1);box-shadow:0 4px 16px rgba(0,0,0,.10),0 1px 2px rgba(0,0,0,.05)}
-.sm-pill{display:flex;align-items:center;gap:9px;height:30px;padding:0 11px;border-radius:999px;font:inherit;color:inherit;cursor:pointer;touch-action:none;user-select:none;transition:border-color .15s ease,box-shadow .15s ease}
+.sm-root.sm-settling{transition:left .18s cubic-bezier(.22,.61,.36,1),top .18s cubic-bezier(.22,.61,.36,1)}
+.sm-pill,.sm-card{background:var(--dsw-alias-bg-overlay);border:1px solid var(--dsw-alias-border-l1);box-shadow:0 4px 16px rgba(0,0,0,.10),0 1px 2px rgba(0,0,0,.05);transition:opacity .16s ease,border-color .15s ease,box-shadow .15s ease}
+.sm-root.sm-dragging .sm-pill,.sm-root.sm-dragging .sm-card{opacity:.72;cursor:grabbing}
+.sm-root.sm-dragging .sm-head{cursor:grabbing}
+.sm-pill{display:flex;align-items:center;gap:9px;height:30px;padding:0 11px;border-radius:999px;font:inherit;color:inherit;cursor:pointer;touch-action:none;user-select:none}
 .sm-pill:hover{border-color:var(--dsw-alias-border-l2);box-shadow:0 6px 20px rgba(0,0,0,.14),0 1px 2px rgba(0,0,0,.06)}
-.sm-pill.dragging,.sm-card.dragging{cursor:grabbing}
 .sm-hint{font-size:11px;color:var(--dsw-alias-label-secondary);white-space:nowrap}
 .sm-caret{display:flex;align-items:center;color:var(--dsw-alias-label-secondary)}
 .sm-micro{display:flex;align-items:center;gap:4px;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -62,5 +64,5 @@ export const PANEL_CSS = `
 .sm-error{padding:12px;font-size:11.5px;line-height:1.5;color:var(--dsw-alias-state-error-primary);border-top:1px solid var(--dsw-alias-border-l1)}
 .sm-pill:focus-visible,.sm-icon:focus-visible,.sm-reset:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}
 @media(max-width:520px){.sm-root{right:10px;bottom:10px}.sm-card{width:calc(100vw - 20px)}}
-@media(prefers-reduced-motion:reduce){.sm-dot.bad{animation:none}.sm-icon.spinning svg{animation:none}.sm-micro-fill,.sm-fill,.sm-pill{transition:none}}
+@media(prefers-reduced-motion:reduce){.sm-dot.bad{animation:none}.sm-icon.spinning svg{animation:none}.sm-micro-fill,.sm-fill,.sm-pill,.sm-card,.sm-root.sm-settling{transition:none}}
 `

@@ -14,7 +14,8 @@ Runs on **Windows**.
 ## Features
 
 - **Never covers the middle.** Collapsed it is a ~210 px pill; expanded it is a 280 px card. It sits clear of the composer by default.
-- **Draggable.** Drag the pill or the card header anywhere; the position is clamped to the viewport and remembered. A reset control returns it to the corner.
+- **Draggable, with smart snapping.** Drag the pill or the card header freely; the panel fades slightly while moving. Release it within 20 px of any viewport edge and it snaps to the nearest **corner or edge midpoint** (eight anchors), keeping a 14 px visual gap (10 px on narrow screens). Released farther in, it stays where you dropped it.
+- **It remembers the relationship, not the pixel.** A snapped panel stores its anchor and edge gap, so a window resize recomputes its position from that anchor: it stays attached to the same edge, with the gap unchanged, and keeps that edge through expand/collapse. The placement is persisted in `localStorage` and restored on the next launch; the reset control returns it to the bottom-right corner.
 - **Live at a glance.** The status dot is colour-coded — green nominal, amber elevated, pulsing red for collection failure.
 - **Detail on demand.** CPU, memory and **disk activity** as bars, plus one row per volume, a memory total, adapter state, uptime and battery.
 - **Capacity and activity are never conflated.** The 磁盘 gauge is *busy time* — the same figure as Task Manager's own 磁盘 column, computed as `100 − PercentIdleTime`. Fullness is a separate per-volume row. A static "93% full" number sitting next to a live CPU reading reads as a stuck or broken dial, so it is never what the gauge shows.
@@ -102,7 +103,7 @@ This bundle inserts one Host/Client row, declared in [`cordis.patch.yml`](cordis
 
 Override that row in your profile or home `cordis.patch.yml` to disable it or change its position in the tree.
 
-Browser-local preferences are limited to one value: the dragged panel position, stored under the `dsh-windows-monitor:position` `localStorage` key. It is written only when you drag the panel and removed when you press reset. The plugin stores no metrics.
+Browser-local preferences are limited to one value: the panel's position and snap anchor, stored under the `dsh-windows-monitor:position` `localStorage` key. The current shape is versioned (`{ version: 2, placement: { kind: 'anchor', x, y, gap } }` or `{ kind: 'free', x, y }`), and the plain `{ x, y }` coordinates written by 0.2.4 and earlier are still read on upgrade. It is written only when a drag settles or snaps and removed when you press reset. The plugin stores no metrics.
 
 ## How it works
 
@@ -133,7 +134,7 @@ Read this before installing.
 - **No network egress.** The plugin makes no outbound requests. Its only HTTP surface is the local route served by the harness on your machine.
 - **No secret material.** The plugin never reads credentials.
 - **Cache-Control: no-store** on every response.
-- **One localStorage key**, holding only the panel position.
+- **One localStorage key**, holding only the panel position and snap anchor (including its edge gap), never metric data.
 
 ## Development
 

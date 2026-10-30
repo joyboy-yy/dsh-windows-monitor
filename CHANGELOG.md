@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Smart edge and corner snapping.** A drag now ends by measuring the gap to all four viewport edges. Any edge closer than 20 px becomes a snap candidate: two candidates resolve to the corresponding corner, one resolves to that edge's midpoint — the documented eight anchors (four corners plus four edge midpoints). The panel settles 14 px from the edge (10 px on narrow screens), and only a genuine drag can trigger a snap.
+- **Drag feedback.** While a drag is in motion the pill or card fades to 72% opacity and shows the grabbing cursor; a snapped release animates the short hop to its anchor.
+- **Anchor-aware resize.** A snapped placement is stored as `{ anchor, gap }` instead of a pixel coordinate. On `resize` (and on expand/collapse) the position is re-resolved from that anchor, so the panel stays attached to the same edge with the same gap instead of drifting into the middle.
+- **Versioned persistence with migration.** The last drag or snap is written under the existing `dsh-windows-monitor:position` key as `{ version: 2, placement }`; the legacy plain `{ x, y }` written by 0.2.4 and earlier is read as a free placement, so upgrading does not move the panel. Coordinates are still clamped to the viewport.
+
+### Changed
+
+- The panel measures the layout viewport (`documentElement.clientWidth/Height`) rather than `window.innerWidth/Height`, keeping its arithmetic consistent with `position: fixed` when a document scrollbar is present.
+- Dragging is clamped at the true viewport edge (0 px) so the 20 px release test can be reached; the visual edge gap is applied by the snap, not by the drag clamp.
+
 ## [0.2.4] - 2026-10-16
 
 ### Fixed
