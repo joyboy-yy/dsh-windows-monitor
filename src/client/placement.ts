@@ -1,14 +1,15 @@
 /**
  * Placement geometry for the overlay panel.
  *
- * The panel is painted in viewport pixels, but a snapped position is remembered
- * as a relation to the viewport — which edge (or edge midpoint) it belongs to
- * and how far it sits from that edge — rather than as a pair of coordinates.
+ * The panel is painted in viewport pixels, but a docked position is remembered
+ * as a relation to the usable area — which edge (or edge midpoint) it belongs
+ * to and how far it sits from that edge — rather than as a pair of coordinates.
  * A resize can then recompute the pixels from the anchor, so the gap the user
  * chose survives instead of the panel drifting away from its edge.
  *
- * Everything here is pure: no DOM, no storage, no React. The component owns
- * those seams and this module owns the arithmetic.
+ * The usable area excludes the window-chrome strip at the top (titlebar and
+ * caption buttons). Everything here is pure: no DOM, no storage, no React.
+ * The component owns those seams and this module owns the arithmetic.
  */
 
 /** A point in viewport coordinates; the panel's top-left corner. */
@@ -23,13 +24,19 @@ export interface Size {
   height: number
 }
 
-/** Horizontal relationship to the viewport. */
+/** The viewport plus the top strip reserved by the window chrome. */
+export interface Viewport extends Size {
+  /** Height of the reserved strip at the top, in px. */
+  insetTop: number
+}
+
+/** Horizontal relationship to the usable area. */
 export type HorizontalAnchor = 'left' | 'center' | 'right'
 
-/** Vertical relationship to the viewport. */
+/** Vertical relationship to the usable area. */
 export type VerticalAnchor = 'top' | 'middle' | 'bottom'
 
-/** A position attached to one edge or corner, with a fixed gap. */
+/** A position docked to one edge/corner of the usable area, with a fixed gap. */
 export interface AnchorPlacement {
   kind: 'anchor'
   x: HorizontalAnchor
@@ -38,7 +45,7 @@ export interface AnchorPlacement {
   gap: number
 }
 
-/** A position the user dropped away from every edge. */
+/** A position the user dropped freely; persisted as viewport coordinates. */
 export interface FreePlacement {
   kind: 'free'
   x: number
@@ -48,7 +55,7 @@ export interface FreePlacement {
 /** Everything the panel needs in order to know where it belongs. */
 export type Placement = AnchorPlacement | FreePlacement
 
-/** Distance between a snapped panel and its edge, in px. */
+/** Distance between a docked panel and its edge, in px. */
 export const EDGE_GAP = 14
 
 /** Narrower screens keep the panel a little tighter to the edge. */
@@ -56,14 +63,6 @@ export const COMPACT_EDGE_GAP = 10
 
 /** Width at or below which {@link COMPACT_EDGE_GAP} applies, in px. */
 export const COMPACT_MAX_WIDTH = 520
-
-/**
- * Distance to an edge that triggers a snap, in px.
- *
- * The comparison is strict (`<`): a panel released at exactly this distance
- * stays where it was dropped, matching "less than 20 px" literally.
- */
-export const SNAP_THRESHOLD = 20
 
 /** Version of the persisted shape; bumped when its meaning changes. */
 export const STORAGE_VERSION = 2
@@ -81,18 +80,25 @@ export function defaultPlacement(viewport: Size): AnchorPlacement {
   return { kind: 'anchor', x: 'right', y: 'bottom', gap: edgeGap(viewport) }
 }
 
-/** Keep the panel's whole box inside the viewport during a drag. */
-export function clampToViewport(point: Point, size: Size, viewport: Size): Point {
+/**
+ * Keep the panel's whole box inside the usable area.
+ *
+ * The lower bound on `y` is the chrome strip, so neither a drag nor a restored
+ * free position can put the panel over the window controls.
+ */
+export function clampToViewport(point: Point, size: Size, viewport: Viewport): Point {
+  const minY = viewport.insetTop
   const maxX = Math.max(0, viewport.width - size.width)
-  const maxY = Math.max(0, viewport.height - size.height)
+  const maxY = Math.max(minY, viewport.height - size.height)
   return {
     x: Math.min(Math.max(0, point.x), maxX),
-    y: Math.min(Math.max(0, point.y), maxY),
+    y: Math.min(Math.max(minY, point.y), maxY),
   }
 }
 
-/** Resolve an anchored placement to pixels for the current viewport. */
-export function anchorPoint(placement: AnchorPlacement, size: Size, viewport: Size): Point {
+/** Resolve a docked placement to pixels for the current viewport. */
+export function anchorPoint(placement: AnchorPlacement, size: Size, viewport: Viewport): Point {
+  const usableHeight = Math.max(0, viewport.height - viewport.insetTop)
   const x =
     placement.x === 'left'
       ? placement.gap
@@ -101,77 +107,20 @@ export function anchorPoint(placement: AnchorPlacement, size: Size, viewport: Si
         : (viewport.width - size.width) / 2
   const y =
     placement.y === 'top'
-      ? placement.gap
+      ? viewport.insetTop + placement.gap
       : placement.y === 'bottom'
         ? viewport.height - size.height - placement.gap
-        : (viewport.height - size.height) / 2
-  return { x, y }
+        : viewport.insetTop + (usableHeight - size.height) / 2
+  // A panel larger than the viewport cannot honour both edges; keep its top and
+  // left on screen so it still cannot reach the window controls.
+  return { x: Math.max(0, x), y: Math.max(viewport.insetTop, y) }
 }
 
 /** Resolve any placement to pixels; free positions are also clamped inside. */
-export function resolvePlacement(placement: Placement, size: Size, viewport: Size): Point {
+export function resolvePlacement(placement: Placement, size: Size, viewport: Viewport): Point {
   return placement.kind === 'anchor'
     ? anchorPoint(placement, size, viewport)
     : clampToViewport(placement, size, viewport)
-}
-
-/**
- * Decide where a released panel belongs.
- *
- * Any edge closer than `threshold` is a candidate. Both axes candidates become a
- * corner; a single axis candidate becomes that edge's midpoint, because the
- * other axis has no edge to hold on to. That yields the eight anchors the panel
- * documents: four corners plus four edge midpoints.
- *
- * @returns the anchor to settle on, or `null` when the panel was dropped clear
- *          of every edge and should stay at the free position.
- */
-export function snapPlacement(
-  point: Point,
-  size: Size,
-  viewport: Size,
-  gap: number = edgeGap(viewport),
-  threshold: number = SNAP_THRESHOLD,
-): AnchorPlacement | null {
-  const left = point.x
-  const right = viewport.width - point.x - size.width
-  const top = point.y
-  const bottom = viewport.height - point.y - size.height
-
-  let x: HorizontalAnchor | undefined
-  if (left < threshold && right < threshold) x = left <= right ? 'left' : 'right'
-  else if (left < threshold) x = 'left'
-  else if (right < threshold) x = 'right'
-
-  let y: VerticalAnchor | undefined
-  if (top < threshold && bottom < threshold) y = top <= bottom ? 'top' : 'bottom'
-  else if (top < threshold) y = 'top'
-  else if (bottom < threshold) y = 'bottom'
-
-  if (x === undefined && y === undefined) return null
-  return { kind: 'anchor', x: x ?? 'center', y: y ?? 'middle', gap }
-}
-
-/** Turn the release point into its final placement, snapping when eligible. */
-export function settlePlacement(
-  point: Point,
-  size: Size,
-  viewport: Size,
-  gap: number = edgeGap(viewport),
-  threshold: number = SNAP_THRESHOLD,
-): Placement {
-  return snapPlacement(point, size, viewport, gap, threshold) ?? { kind: 'free', x: point.x, y: point.y }
-}
-
-/** Whether the placement is the default bottom-right corner for this viewport. */
-export function isDefaultPlacement(placement: Placement, viewport: Size): boolean {
-  const fallback = defaultPlacement(viewport)
-  return (
-    placement.kind === 'anchor' &&
-    placement.x === fallback.x &&
-    placement.y === fallback.y &&
-    placement.gap === fallback.gap
-  )
 }
 
 /** Narrow a stored gap into the range the panel can use. */
@@ -185,13 +134,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** Read one anchored placement, rejecting unknown anchor names. */
+/** Read one docked placement, rejecting unknown anchor names. */
 function readAnchor(value: Record<string, unknown>): AnchorPlacement | null {
   const { x, y } = value
   if (x !== 'left' && x !== 'center' && x !== 'right') return null
   if (y !== 'top' && y !== 'middle' && y !== 'bottom') return null
-  // `center`/`middle` would mean the middle of the viewport, not one of the
-  // eight documented anchors.
+  // `center`/`middle` would mean the middle of the usable area, not one of the
+  // eight documented positions.
   if (x === 'center' && y === 'middle') return null
   const gap = readGap(value.gap)
   if (gap === null) return null

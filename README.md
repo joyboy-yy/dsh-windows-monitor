@@ -14,8 +14,10 @@ Runs on **Windows**.
 ## Features
 
 - **Never covers the middle.** Collapsed it is a ~210 px pill; expanded it is a 280 px card. It sits clear of the composer by default.
-- **Draggable, with smart snapping.** Drag the pill or the card header freely; the panel fades slightly while moving. Release it within 20 px of any viewport edge and it snaps to the nearest **corner or edge midpoint** (eight anchors), keeping a 14 px visual gap (10 px on narrow screens). Released farther in, it stays where you dropped it.
-- **It remembers the relationship, not the pixel.** A snapped panel stores its anchor and edge gap, so a window resize recomputes its position from that anchor: it stays attached to the same edge, with the gap unchanged, and keeps that edge through expand/collapse. The placement is persisted in `localStorage` and restored on the next launch; the reset control returns it to the bottom-right corner.
+- **Draggable, with no automatic snapping.** Drag the pill or the card header freely; the panel fades slightly while moving. It stays exactly where you release it — proximity to an edge changes nothing.
+- **Explicit custom positions.** Open the card and choose **自定义位置** to pick one of eight anchors from a 3×3 grid: four corners and four edge midpoints, with a 14 px gap (10 px on narrow screens). A docked panel stores its anchor and gap, so a resize recomputes its position from that anchor and keeps it on the same edge through expand/collapse.
+- **Stays out of the window controls.** Top anchors and the drag range start below the window-chrome strip published as `--dsh-frame-top-clearance` / `--dsh-frame-overlay-top`, so the panel never covers the titlebar or the minimize, maximize and close buttons. Native fullscreen uses the collapsed inset automatically.
+- **Remembers the last placement.** A free drag coordinate or a chosen dock anchor is written to `localStorage` and restored on the next launch, then clamped into the current safe area if the window is smaller.
 - **Live at a glance.** The status dot is colour-coded — green nominal, amber elevated, pulsing red for collection failure.
 - **Detail on demand.** CPU, memory and **disk activity** as bars, plus one row per volume, a memory total, adapter state, uptime and battery.
 - **Capacity and activity are never conflated.** The 磁盘 gauge is *busy time* — the same figure as Task Manager's own 磁盘 column, computed as `100 − PercentIdleTime`. Fullness is a separate per-volume row. A static "93% full" number sitting next to a live CPU reading reads as a stuck or broken dial, so it is never what the gauge shows.
@@ -103,7 +105,7 @@ This bundle inserts one Host/Client row, declared in [`cordis.patch.yml`](cordis
 
 Override that row in your profile or home `cordis.patch.yml` to disable it or change its position in the tree.
 
-Browser-local preferences are limited to one value: the panel's position and snap anchor, stored under the `dsh-windows-monitor:position` `localStorage` key. The current shape is versioned (`{ version: 2, placement: { kind: 'anchor', x, y, gap } }` or `{ kind: 'free', x, y }`), and the plain `{ x, y }` coordinates written by 0.2.4 and earlier are still read on upgrade. It is written only when a drag settles or snaps and removed when you press reset. The plugin stores no metrics.
+Browser-local preferences are limited to one value: the panel's position and dock anchor, stored under the `dsh-windows-monitor:position` `localStorage` key. The current shape is versioned (`{ version: 2, placement: { kind: 'anchor', x, y, gap } }` or `{ kind: 'free', x, y }`), and the plain `{ x, y }` coordinates written by 0.2.4 and earlier are still read on upgrade. It is written only when a drag ends or a custom position is chosen; there is no separate restore button, because bottom-right is one of the eight dock choices. The plugin stores no metrics.
 
 ## How it works
 
@@ -134,7 +136,7 @@ Read this before installing.
 - **No network egress.** The plugin makes no outbound requests. Its only HTTP surface is the local route served by the harness on your machine.
 - **No secret material.** The plugin never reads credentials.
 - **Cache-Control: no-store** on every response.
-- **One localStorage key**, holding only the panel position and snap anchor (including its edge gap), never metric data.
+- **One localStorage key**, holding only the panel position and dock anchor (including its edge gap), never metric data.
 
 ## Development
 

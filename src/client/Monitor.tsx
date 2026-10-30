@@ -3,12 +3,14 @@
  *
  * Lives in the frame-wide `shell.overlay` slot as a fixed corner surface: a
  * compact pill while collapsed, and a detail card while expanded. Both states
- * share one anchor, so the panel never grows into the middle of the page.
+ * share one placement, so the panel never grows into the middle of the page.
  *
- * A drag turns the panel into a free placement; releasing it near an edge
- * settles it onto one of eight anchors (corners and edge midpoints). Anchored
- * placements are recomputed on resize, so the recorded gap is what survives,
- * not the pixel coordinate.
+ * Dragging always produces a free placement — there is no release-time snap.
+ * Docking is explicit: the card's 自定义位置 picker offers eight anchors
+ * (corners and edge midpoints). Docked placements are recomputed on resize, so
+ * the recorded gap survives instead of the pixel coordinate. The usable area
+ * starts below the frame's window-chrome strip, so neither a drag nor a docked
+ * top position can cover the titlebar or its caption buttons.
  */
 
 import {
@@ -29,15 +31,16 @@ import {
   clampToViewport,
   defaultPlacement,
   edgeGap,
-  isDefaultPlacement,
   parsePlacement,
   resolvePlacement,
   serializePlacement,
-  settlePlacement,
   type AnchorPlacement,
+  type HorizontalAnchor,
   type Placement,
   type Point,
   type Size,
+  type VerticalAnchor,
+  type Viewport,
 } from './placement.js'
 
 /** Pointer travel before a press turns into a drag rather than a click, in px. */
@@ -46,14 +49,42 @@ const DRAG_THRESHOLD = 4
 /** How long a drag keeps swallowing clicks, in ms. */
 const CLICK_SUPPRESS_MS = 350
 
-/** How long the settle animation runs, in ms. */
-const SETTLE_MS = 220
+/** How long the move to an explicitly chosen position runs, in ms. */
+const PLACE_MS = 220
 
 /** Poll interval for the snapshot endpoint, in ms. */
 const REFRESH_MS = 10_000
 
 /** Storage key holding the last placement. Kept from 0.2.4 for migration. */
 const POSITION_KEY = 'dsh-windows-monitor:position'
+
+/** DOM id linking the position button to its grid. */
+const POSITION_PANEL_ID = 'sm-windows-monitor-positions'
+
+/** One direction offered by the custom-position picker. */
+interface PositionChoice {
+  x: HorizontalAnchor
+  y: VerticalAnchor
+  label: string
+}
+
+/**
+ * The picker grid, row by row: corners, edge midpoints, and an empty centre.
+ *
+ * The order is the visual order, so adding a target here is enough to add a
+ * button in the right cell.
+ */
+const POSITION_GRID: ReadonlyArray<PositionChoice | null> = [
+  { x: 'left', y: 'top', label: '左上角' },
+  { x: 'center', y: 'top', label: '顶部居中' },
+  { x: 'right', y: 'top', label: '右上角' },
+  { x: 'left', y: 'middle', label: '左侧居中' },
+  null,
+  { x: 'right', y: 'middle', label: '右侧居中' },
+  { x: 'left', y: 'bottom', label: '左下角' },
+  { x: 'center', y: 'bottom', label: '底部居中' },
+  { x: 'right', y: 'bottom', label: '右下角' },
+]
 
 /** Thresholds for one metric. */
 interface Severity {
@@ -130,14 +161,61 @@ function formatThroughput(value: number | null): string {
  * `position: fixed` resolves against the layout viewport, which excludes a
  * document scrollbar; `innerWidth` includes it. Using the same box for the
  * arithmetic as the browser uses for `right`/`bottom` avoids a one-scrollbar
- * jump the first time a default-anchored panel is dragged.
+ * jump the first time a docked panel is dragged.
  */
-function readViewport(): Size {
+function readViewportSize(): Size {
   const root = document.documentElement
   return {
     width: root.clientWidth || window.innerWidth,
     height: root.clientHeight || window.innerHeight,
   }
+}
+
+/**
+ * Resolve one frame variable to pixels through a probe.
+ *
+ * `getComputedStyle(root).getPropertyValue('--x')` may return a `calc(...)`
+ * expression rather than a length; putting the variable in a real `height`
+ * makes the browser resolve it. A plain browser publishes neither variable,
+ * and the `0px` fallback keeps this at zero there.
+ */
+function readCssLength(variable: string): number {
+  const probe = document.createElement('span')
+  probe.style.cssText = [
+    'position:fixed',
+    'left:0',
+    'top:0',
+    'width:0',
+    'display:block',
+    'visibility:hidden',
+    'pointer-events:none',
+    `height:var(${variable},0px)`,
+  ].join(';')
+  const host = document.body ?? document.documentElement
+  host.appendChild(probe)
+  const length = probe.getBoundingClientRect().height
+  probe.remove()
+  return Number.isFinite(length) && length > 0 ? length : 0
+}
+
+/**
+ * The top inset reserved for floating layers.
+ *
+ * DSH publishes `--dsh-frame-overlay-top` for overlays: the window-chrome strip
+ * plus a 20px breathing gap, reduced to 20px in native fullscreen. That is the
+ * same top bound the frame's own dockkit floats use, so a floating panel here
+ * follows the platform instead of inventing a second safe area. A frame that
+ * publishes only the bare strip falls back to `--dsh-frame-top-clearance`;
+ * plain browser documents publish neither.
+ */
+function readInsetTop(): number {
+  const overlayTop = readCssLength('--dsh-frame-overlay-top')
+  return overlayTop > 0 ? overlayTop : readCssLength('--dsh-frame-top-clearance')
+}
+
+/** The layout viewport plus the frame's reserved top strip. */
+function readViewport(): Viewport {
+  return { ...readViewportSize(), insetTop: readInsetTop() }
 }
 
 /** Read the persisted placement, tolerating absent or corrupt storage. */
@@ -176,14 +254,34 @@ function fallbackStyle(placement: Placement): CSSProperties {
     style.left = '50%'
     transforms.push('translateX(-50%)')
   }
-  if (placement.y === 'top') style.top = gap
-  else if (placement.y === 'bottom') style.bottom = gap
+  if (placement.y === 'top') {
+    // The fallback runs before the layout effect has measured the frame inset.
+    // Using the published overlay inset here keeps even that first paint below
+    // the window controls; the measured inset replaces it before paint.
+    style.top = `calc(var(--dsh-frame-overlay-top, 0px) + ${gap}px)`
+  } else if (placement.y === 'bottom') style.bottom = gap
   else {
     style.top = '50%'
     transforms.push('translateY(-50%)')
   }
   if (transforms.length > 0) style.transform = transforms.join(' ')
   return style
+}
+
+/** Whether a docked placement is the direction this grid cell names. */
+function isActivePosition(placement: Placement, choice: PositionChoice): boolean {
+  return placement.kind === 'anchor' && placement.x === choice.x && placement.y === choice.y
+}
+
+/** The 3x3 glyph on the custom-position button. */
+function PositionGlyph(): ReactElement {
+  return (
+    <span className="sm-grid-glyph" aria-hidden="true">
+      {Array.from({ length: 9 }, (_, index) => (
+        <span key={index} />
+      ))}
+    </span>
+  )
 }
 
 /** Render a measured point. */
@@ -251,19 +349,21 @@ export function Monitor({ ctx }: { ctx: ClientPluginContext }): ReactElement {
   const [error, setError] = useState('')
   const [unsupported, setUnsupported] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [viewport, setViewport] = useState<Size>(readViewport)
+  const [viewport, setViewport] = useState<Viewport>(() => ({ ...readViewportSize(), insetTop: 0 }))
   const [placement, setPlacement] = useState<Placement>(
-    () => readStoredPlacement() ?? defaultPlacement(readViewport()),
+    () => readStoredPlacement() ?? defaultPlacement(readViewportSize()),
   )
   const [box, setBox] = useState<Size | null>(null)
   const [dragging, setDragging] = useState(false)
-  const [settling, setSettling] = useState(false)
+  const [placing, setPlacing] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const positionButtonRef = useRef<HTMLButtonElement | null>(null)
   const dragRef = useRef<DragState | null>(null)
   const movedRef = useRef(false)
   const suppressClickRef = useRef(0)
-  const settleTimerRef = useRef<number | null>(null)
+  const placeTimerRef = useRef<number | null>(null)
 
   const refresh = useCallback(async (): Promise<void> => {
     setLoading(true)
@@ -291,23 +391,37 @@ export function Monitor({ ctx }: { ctx: ClientPluginContext }): ReactElement {
     return ctx.interval(() => void refresh(), REFRESH_MS)
   }, [ctx, refresh])
 
-  // A resize is an instruction to re-resolve the recorded anchor: the panel
-  // keeps the same edge gap while the viewport changes around it. Free
-  // placements are clamped by `resolvePlacement` so they cannot fall offscreen.
-  useEffect(() => {
-    const onResize = (): void => {
+  // Resolve the frame's reserved top strip before the first paint, then follow
+  // window resizes and the desktop's fullscreen/titlebar markers. That strip is
+  // what keeps the panel out of the window-control area; the viewport state
+  // starts at zero because reading the frame variables needs a DOM probe.
+  useLayoutEffect(() => {
+    const sync = (): void => {
       const next = readViewport()
       setViewport((current) =>
-        current.width === next.width && current.height === next.height ? current : next,
+        current.width === next.width &&
+        current.height === next.height &&
+        current.insetTop === next.insetTop
+          ? current
+          : next,
       )
     }
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
+    sync()
+    window.addEventListener('resize', sync)
+    const observer = new MutationObserver(sync)
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-fullscreen', 'data-windows-titlebar', 'data-platform'],
+    })
+    return () => {
+      window.removeEventListener('resize', sync)
+      observer.disconnect()
+    }
   }, [])
 
-  // Measure the rendered box once and whenever expanding/collapsing changes it.
-  // `useLayoutEffect` runs before paint, so an anchored panel never draws with
-  // the previous state's footprint for a frame.
+  // Measure the rendered box once and whenever expanding/collapsing or opening
+  // the position picker changes it. `useLayoutEffect` runs before paint, so a
+  // docked panel never draws with the previous state's footprint for a frame.
   useLayoutEffect(() => {
     const node = rootRef.current
     if (!node) return
@@ -324,22 +438,27 @@ export function Monitor({ ctx }: { ctx: ClientPluginContext }): ReactElement {
     const observer = new ResizeObserver(sync)
     observer.observe(node)
     return () => observer.disconnect()
+  }, [open, pickerOpen])
+
+  // A collapsed card has no picker; do not reopen it with the card next time.
+  useEffect(() => {
+    if (!open) setPickerOpen(false)
   }, [open])
 
   useEffect(
     () => () => {
-      if (settleTimerRef.current !== null) window.clearTimeout(settleTimerRef.current)
+      if (placeTimerRef.current !== null) window.clearTimeout(placeTimerRef.current)
     },
     [],
   )
 
-  const beginSettle = (): void => {
-    setSettling(true)
-    if (settleTimerRef.current !== null) window.clearTimeout(settleTimerRef.current)
-    settleTimerRef.current = window.setTimeout(() => {
-      settleTimerRef.current = null
-      setSettling(false)
-    }, SETTLE_MS)
+  const beginPlacement = (): void => {
+    setPlacing(true)
+    if (placeTimerRef.current !== null) window.clearTimeout(placeTimerRef.current)
+    placeTimerRef.current = window.setTimeout(() => {
+      placeTimerRef.current = null
+      setPlacing(false)
+    }, PLACE_MS)
   }
 
   const beginDrag = (event: ReactPointerEvent<HTMLElement>): void => {
@@ -369,7 +488,7 @@ export function Monitor({ ctx }: { ctx: ClientPluginContext }): ReactElement {
       last: null,
     }
     movedRef.current = false
-    setSettling(false)
+    setPlacing(false)
     try {
       event.currentTarget.setPointerCapture(event.pointerId)
     } catch {
@@ -388,8 +507,8 @@ export function Monitor({ ctx }: { ctx: ClientPluginContext }): ReactElement {
       setDragging(true)
     }
 
-    // Zero inset while dragging: the user must be able to reach the actual
-    // edge for the release-time snap test to mean anything.
+    // Clamp inside the usable area: its top edge is below the window chrome,
+    // so the panel cannot be dragged over the titlebar or caption buttons.
     const next = clampToViewport(
       { x: drag.originX + dx, y: drag.originY + dy },
       { width: drag.width, height: drag.height },
@@ -417,12 +536,11 @@ export function Monitor({ ctx }: { ctx: ClientPluginContext }): ReactElement {
     // The pill can grow while the snapshot loads; the last measured box is the
     // footprint that is actually on screen at release.
     const size = box ?? { width: drag.width, height: drag.height }
-    const next = settlePlacement(released, size, viewport, edgeGap(viewport))
+    // No release-time snapping: the drop point is the placement. Docking is
+    // an explicit action through the position picker.
+    const next: Placement = { kind: 'free', ...clampToViewport(released, size, viewport) }
     setPlacement(next)
     writeStoredPlacement(next)
-    // Only a snap moves the panel again after release; animate that hop. A
-    // free drop is already exactly where the pointer left it.
-    if (next.kind === 'anchor') beginSettle()
   }
 
   const toggle = (): void => {
@@ -433,12 +551,20 @@ export function Monitor({ ctx }: { ctx: ClientPluginContext }): ReactElement {
     setOpen((value) => !value)
   }
 
-  const resetPosition = (): void => {
-    setPlacement(defaultPlacement(viewport))
-    // Clearing, rather than writing the default, lets a later launch pick the
-    // gap appropriate for its own viewport width.
-    writeStoredPlacement(null)
-    beginSettle()
+  const choosePosition = (choice: PositionChoice): void => {
+    const next: AnchorPlacement = {
+      kind: 'anchor',
+      x: choice.x,
+      y: choice.y,
+      gap: edgeGap(viewport),
+    }
+    setPlacement(next)
+    writeStoredPlacement(next)
+    setPickerOpen(false)
+    beginPlacement()
+    // The pressed grid cell unmounts with the picker; return focus to the
+    // control that opened it.
+    positionButtonRef.current?.focus()
   }
 
   const cpu = data ? Number(data.cpu) || 0 : 0
@@ -559,7 +685,7 @@ export function Monitor({ ctx }: { ctx: ClientPluginContext }): ReactElement {
   return (
     <div
       ref={rootRef}
-      className={`sm-root${dragging ? ' sm-dragging' : ''}${settling ? ' sm-settling' : ''}`}
+      className={`sm-root${dragging ? ' sm-dragging' : ''}${placing ? ' sm-placing' : ''}`}
       style={rootStyle}
       data-placement={placement.kind === 'anchor' ? `${placement.x}-${placement.y}` : 'free'}
     >
@@ -605,12 +731,65 @@ export function Monitor({ ctx }: { ctx: ClientPluginContext }): ReactElement {
                 <span className="sm-time">
                   {data ? `更新于 ${new Date(data.timestamp).toLocaleTimeString()}` : '正在建立基线'}
                 </span>
-                {!isDefaultPlacement(placement, viewport) && (
-                  <button type="button" className="sm-reset" onClick={resetPosition} title="把面板放回右下角">
-                    复位
-                  </button>
-                )}
+                <button
+                  ref={positionButtonRef}
+                  type="button"
+                  className="sm-positions-toggle"
+                  onClick={() => setPickerOpen((value) => !value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape' && pickerOpen) {
+                      event.stopPropagation()
+                      setPickerOpen(false)
+                    }
+                  }}
+                  aria-expanded={pickerOpen}
+                  aria-controls={POSITION_PANEL_ID}
+                  title="选择悬浮窗停靠位置"
+                >
+                  <PositionGlyph />
+                  <span>自定义位置</span>
+                </button>
               </div>
+              {pickerOpen && (
+                <div
+                  className="sm-position-panel"
+                  id={POSITION_PANEL_ID}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      event.stopPropagation()
+                      setPickerOpen(false)
+                      positionButtonRef.current?.focus()
+                    }
+                  }}
+                >
+                  <span className="sm-position-label">停靠位置</span>
+                  <div className="sm-position-grid" role="group" aria-label="悬浮窗停靠位置">
+                    {POSITION_GRID.map((choice, index) =>
+                      choice === null ? (
+                        <span key={`center-${index}`} className="sm-position-center" aria-hidden="true" />
+                      ) : (
+                        <button
+                          key={`${choice.x}-${choice.y}`}
+                          type="button"
+                          className={`sm-position${isActivePosition(placement, choice) ? ' active' : ''}`}
+                          onClick={() => choosePosition(choice)}
+                          aria-label={`停靠到${choice.label}`}
+                          aria-pressed={isActivePosition(placement, choice)}
+                          title={choice.label}
+                        >
+                          <span className="sm-position-frame" aria-hidden="true">
+                            <span
+                              className="sm-position-dot"
+                              data-x={choice.x}
+                              data-y={choice.y}
+                            />
+                          </span>
+                        </button>
+                      ),
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -623,8 +802,8 @@ export function Monitor({ ctx }: { ctx: ClientPluginContext }): ReactElement {
           aria-label="展开本机状态"
           title={
             data
-              ? `CPU ${cpu}% · 内存 ${memory}% · 磁盘活动 ${activityText} · 磁盘空间峰值 ${capacityPeak ?? '--'}%（点击展开，可拖动并吸附边缘）`
-              : '本机状态（点击展开，可拖动并吸附边缘）'
+              ? `CPU ${cpu}% · 内存 ${memory}% · 磁盘活动 ${activityText} · 磁盘空间峰值 ${capacityPeak ?? '--'}%（点击展开，可拖动；展开后可自定义位置）`
+              : '本机状态（点击展开，可拖动；展开后可自定义位置）'
           }
           {...handleProps}
         >

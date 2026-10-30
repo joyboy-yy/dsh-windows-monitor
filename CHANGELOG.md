@@ -9,15 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Smart edge and corner snapping.** A drag now ends by measuring the gap to all four viewport edges. Any edge closer than 20 px becomes a snap candidate: two candidates resolve to the corresponding corner, one resolves to that edge's midpoint — the documented eight anchors (four corners plus four edge midpoints). The panel settles 14 px from the edge (10 px on narrow screens), and only a genuine drag can trigger a snap.
-- **Drag feedback.** While a drag is in motion the pill or card fades to 72% opacity and shows the grabbing cursor; a snapped release animates the short hop to its anchor.
-- **Anchor-aware resize.** A snapped placement is stored as `{ anchor, gap }` instead of a pixel coordinate. On `resize` (and on expand/collapse) the position is re-resolved from that anchor, so the panel stays attached to the same edge with the same gap instead of drifting into the middle.
-- **Versioned persistence with migration.** The last drag or snap is written under the existing `dsh-windows-monitor:position` key as `{ version: 2, placement }`; the legacy plain `{ x, y }` written by 0.2.4 and earlier is read as a free placement, so upgrading does not move the panel. Coordinates are still clamped to the viewport.
+- **Explicit custom-position picker.** The card's 自定义位置 control opens a 3×3 grid with the eight real anchors — four corners and four edge midpoints — and marks the current one. Selecting a direction docks the panel with a 14 px gap (10 px on narrow screens), writes the anchor, and animates the move. Bottom-right is one of the eight choices, so no separate reset control is needed.
+- **Window-chrome safe area.** Top anchors, free-placement clamps and drag limits now start at the frame's floating-layer inset — `--dsh-frame-overlay-top`, with `--dsh-frame-top-clearance` as fallback — the same bound the frame's own floating dockkit uses (titlebar plus 20px, 20px in native fullscreen). The panel cannot cover the titlebar or the caption buttons. A `MutationObserver` follows the titlebar/fullscreen markers while a `resize` follows the viewport.
+- **Drag feedback.** While a drag is in motion the pill or card fades to 72% opacity and shows the grabbing cursor.
+- **Anchor-aware resize.** A docked placement is stored as `{ anchor, gap }` instead of a pixel coordinate. On `resize` (and on expand/collapse or picker expansion) the position is re-resolved from that anchor, so the panel stays attached to the same edge with the same gap instead of drifting into the middle.
+- **Versioned persistence with migration.** The last drag or dock is written under the existing `dsh-windows-monitor:position` key as `{ version: 2, placement }`; the legacy plain `{ x, y }` written by 0.2.4 and earlier is read as a free placement, so upgrading does not move the panel. Coordinates are still clamped to the usable area.
 
 ### Changed
 
+- **Automatic release-time snapping was removed.** Dropping the panel near an edge no longer moves it: a drag always produces a free placement at the release point. Docking is now an explicit action through the custom-position picker.
 - The panel measures the layout viewport (`documentElement.clientWidth/Height`) rather than `window.innerWidth/Height`, keeping its arithmetic consistent with `position: fixed` when a document scrollbar is present.
-- Dragging is clamped at the true viewport edge (0 px) so the 20 px release test can be reached; the visual edge gap is applied by the snap, not by the drag clamp.
+- Drag clamping uses the usable area's top edge (below the window chrome), not the viewport edge, so the panel cannot be dragged into the header.
 
 ## [0.2.4] - 2026-10-16
 
